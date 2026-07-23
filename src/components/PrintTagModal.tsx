@@ -19,7 +19,7 @@ export default function PrintTagModal({
 }: PrintTagModalProps) {
   const [tagQuantity, setTagQuantity] = useState<number>(1);
   const [barcodeType, setBarcodeType] = useState<'code128' | 'qrcode'>('code128');
-  const [labelSize, setLabelSize] = useState<'50x30' | '40x25' | 'a4'>('50x30');
+  const [labelSize, setLabelSize] = useState<'58mm' | '80mm' | '50x30' | '40x25' | 'a4'>('58mm');
   const [showStoreName, setShowStoreName] = useState(true);
   const [showPrice, setShowPrice] = useState(true);
 
@@ -100,8 +100,10 @@ export default function PrintTagModal({
                     onChange={(e) => setLabelSize(e.target.value as any)}
                     className="w-full bg-brand-bg border border-brand-tertiary rounded-xl px-3 py-2 text-xs text-brand-neutral focus:outline-none focus:border-brand-primary"
                   >
-                    <option value="50x30">Térmica 50x30 mm (Padrão Gondola/Geral)</option>
-                    <option value="40x25">Térmica 40x25 mm (Compacta / Joias)</option>
+                    <option value="58mm">Bobina 58mm (Maquininha de Cartão / POS Compacta)</option>
+                    <option value="80mm">Bobina 80mm (Impressora EPSON TM-T20 / POS Padrão)</option>
+                    <option value="50x30">Adesivo Térmico 50x30 mm (Gondola)</option>
+                    <option value="40x25">Adesivo Térmico 40x25 mm (Joias)</option>
                     <option value="a4">Folha A4 (Grade de Etiquetas)</option>
                   </select>
                 </div>

@@ -31,22 +31,34 @@
   background: #D4AF37;
 }
 
-/* Print CSS rules for Thermal Tag Labels and Receipts */
+/* Print CSS rules for Thermal Tag Labels, Receipts, and Nota Fiscal (DANFE NFC-e) */
 @media print {
-  body {
+  @page {
+    margin: 0;
+  }
+
+  html, body {
     background-color: #ffffff !important;
     color: #000000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    font-family: 'JetBrains Mono', monospace, sans-serif !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
   /* Hide screen app UI elements when printing */
   #app-container,
   #print-tag-overlay,
   #print-receipt-overlay,
-  #barcode-modal-overlay,
+  #login-modal-backdrop,
+  #database-status-overlay,
   header,
   footer,
   nav,
-  button {
+  button,
+  .no-print {
     display: none !important;
   }
 
@@ -54,8 +66,10 @@
   #printable-tag-area,
   #printable-receipt-area {
     display: block !important;
-    position: static !important;
+    position: relative !important;
     width: 100% !important;
+    margin: 0 auto !important;
+    padding: 2mm !important;
     background-color: #ffffff !important;
     color: #000000 !important;
   }

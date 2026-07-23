@@ -350,8 +350,8 @@ Fim do Relatório - Marento Store Luxury Control
           <div className="pt-1">
             {lowStockProducts.length > 0 ? (
               <div className="space-y-1.5 max-h-24 overflow-y-auto pr-1">
-                {lowStockProducts.map((p) => (
-                  <div key={p.id} className="flex items-center justify-between text-xs p-1.5 bg-brand-bg/60 rounded-lg border border-brand-tertiary/40">
+                {lowStockProducts.map((p, idx) => (
+                  <div key={`low-stock-${p.id || idx}-${idx}`} className="flex items-center justify-between text-xs p-1.5 bg-brand-bg/60 rounded-lg border border-brand-tertiary/40">
                     <span className="font-medium text-brand-neutral truncate max-w-[160px]">{p.name}</span>
                     <span className="font-mono text-rose-400 font-bold">{p.quantity} un <span className="text-[9px] text-gray-500">(mín: {p.minStock})</span></span>
                   </div>
@@ -489,7 +489,7 @@ Fim do Relatório - Marento Store Luxury Control
             <p className="text-xs text-gray-500 text-center py-4">Nenhum produto cadastrado no estoque.</p>
           ) : (
             categorySummaryList.map((cat, idx) => (
-              <div key={cat.name} className="space-y-1.5" id={`reports-cat-stock-item-${idx}`}>
+              <div key={`reports-cat-${cat.name || idx}-${idx}`} className="space-y-1.5" id={`reports-cat-stock-item-${idx}`}>
                 <div className="flex justify-between items-center text-xs">
                   <div className="flex items-center gap-2">
                     <span className="w-2.5 h-2.5 rounded-full bg-brand-primary" />
