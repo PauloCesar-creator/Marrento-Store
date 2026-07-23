@@ -160,8 +160,8 @@ export default function OperationModal({
                     id="op-select-product"
                   >
                     <option value="" disabled id="op-opt-placeholder">Selecione um produto...</option>
-                    {products.map((prod) => (
-                      <option key={prod.id} value={prod.id} id={`op-opt-prod-${prod.id}`}>
+                    {products.map((prod, idx) => (
+                      <option key={`op-prod-${prod.id}-${idx}`} value={prod.id} id={`op-opt-prod-${prod.id}`}>
                         {prod.name} ({prod.category}) • Stock: {prod.quantity}
                       </option>
                     ))}

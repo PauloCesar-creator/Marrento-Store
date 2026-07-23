@@ -220,7 +220,7 @@ export default function DashboardView({
             const meta = getCategoryMeta(catName);
             return (
               <motion.div
-                key={catName}
+                key={`dash-cat-${catName}-${idx}`}
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: idx * 0.04 }}
@@ -318,9 +318,9 @@ export default function DashboardView({
 
         {/* Flow list */}
         <div className="space-y-2.5" id="dash-activity-list">
-          {transactions.slice(0, 5).map((tx) => (
+          {transactions.slice(0, 5).map((tx, idx) => (
             <div
-              key={tx.id}
+              key={`dash-tx-${tx.id}-${idx}`}
               className="flex items-center justify-between p-3.5 bg-brand-secondary rounded-xl border border-brand-tertiary/40 shadow-sm"
               id={`dash-activity-item-${tx.id}`}
             >

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Plus, Minus, Trash2, Edit, AlertCircle, ShoppingBag, SlidersHorizontal, Eye, Tag, X, Check, Truck, Sparkles, Layers } from 'lucide-react';
+import { Search, Plus, Minus, Trash2, Edit, AlertCircle, ShoppingBag, SlidersHorizontal, Eye, Tag, X, Check, Truck, Sparkles, Layers, Barcode, Printer } from 'lucide-react';
 import { Product, CategoryName } from '../types';
 import SmartPanelModal from './SmartPanelModal';
 
@@ -20,6 +20,8 @@ interface InventoryViewProps {
   onAddCategory: (name: string) => void;
   onDeleteCategory: (name: string) => void;
   onEditCategory: (oldName: string, newName: string) => void;
+  onOpenBarcodeScanner?: () => void;
+  onOpenPrintTag?: (product: Product) => void;
 }
 
 export default function InventoryView({
@@ -38,6 +40,8 @@ export default function InventoryView({
   onAddCategory,
   onDeleteCategory,
   onEditCategory,
+  onOpenBarcodeScanner,
+  onOpenPrintTag,
 }: InventoryViewProps) {
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [isAddOpen, setIsAddOpen] = useState<boolean>(false);
@@ -188,10 +192,9 @@ export default function InventoryView({
     return matchesCategory && matchesSearch;
   });
 
-  const categoriesList: (CategoryName | 'Todos')[] = [
-    'Todos',
-    ...categories,
-  ];
+  const categoriesList: (CategoryName | 'Todos')[] = Array.from(
+    new Set(['Todos', ...categories])
+  );
 
   // Helper to get relative category icon background
   const getStockBadgeStyle = (prod: Product) => {
@@ -216,6 +219,18 @@ export default function InventoryView({
         </div>
         
         <div className="flex flex-wrap items-center gap-2" id="inv-header-actions">
+          {onOpenBarcodeScanner && (
+            <button
+              onClick={onOpenBarcodeScanner}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-brand-primary text-black font-sans font-bold text-xs shadow-md transition duration-200 cursor-pointer hover:bg-brand-primary/90"
+              id="inv-btn-scanner-header"
+              title="Leitor de Código de Barras (Plug & Play)"
+            >
+              <Barcode className="w-4 h-4" />
+              <span>Modo Bipar</span>
+            </button>
+          )}
+
           <button
             onClick={() => setIsManageCatsOpen(true)}
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-brand-secondary hover:bg-brand-tertiary border border-brand-tertiary text-brand-neutral font-sans font-bold text-xs shadow-md transition duration-200 cursor-pointer"
@@ -247,24 +262,38 @@ export default function InventoryView({
 
       {/* 2. Interactive Search and Filters */}
       <div className="space-y-3" id="inv-controls">
-        {/* Search Input */}
-        <div className="relative" id="inv-search-container">
-          <Search className="absolute left-3.5 top-3.5 w-4 h-4 text-gray-500" id="inv-search-icon" />
-          <input
-            type="text"
-            placeholder="Procurar por nome, SKU, fornecedor..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full bg-brand-secondary border border-brand-tertiary rounded-xl pl-10 pr-4 py-3 text-xs text-brand-neutral placeholder-gray-500 focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary"
-            id="inv-search-input"
-          />
+        {/* Search Input with Scanner Bipar Button */}
+        <div className="flex gap-2" id="inv-search-wrapper">
+          <div className="relative flex-1" id="inv-search-container">
+            <Search className="absolute left-3.5 top-3.5 w-4 h-4 text-gray-500" id="inv-search-icon" />
+            <input
+              type="text"
+              placeholder="Procurar por nome, SKU, fornecedor ou código de barras..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full bg-brand-secondary border border-brand-tertiary rounded-xl pl-10 pr-4 py-3 text-xs text-brand-neutral placeholder-gray-500 focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary"
+              id="inv-search-input"
+            />
+          </div>
+
+          {onOpenBarcodeScanner && (
+            <button
+              onClick={onOpenBarcodeScanner}
+              className="flex items-center gap-1.5 px-4 py-3 rounded-xl bg-brand-secondary hover:bg-brand-tertiary border border-brand-primary/60 text-brand-primary font-bold text-xs transition shadow-md cursor-pointer shrink-0"
+              id="inv-btn-bipar-search"
+              title="Abrir Leitor de Código de Barras Plug & Play"
+            >
+              <Barcode className="w-4 h-4 text-brand-primary" />
+              <span className="hidden sm:inline">Bipar</span>
+            </button>
+          )}
         </div>
 
         {/* Categories Scroller Chips */}
         <div className="flex items-center gap-2 overflow-x-auto pb-1.5 scrollbar-none snap-x" id="inv-pills">
-          {categoriesList.map((cat) => (
+          {categoriesList.map((cat, idx) => (
             <button
-              key={cat}
+              key={`inv-pill-${cat}-${idx}`}
               onClick={() => onSelectCategory(cat)}
               className={`shrink-0 snap-start px-4 py-2 rounded-xl text-xs font-semibold border transition ${
                 selectedCategory === cat
@@ -329,9 +358,9 @@ export default function InventoryView({
 
       {/* 3. Product Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4" id="inv-grid">
-        {filteredProducts.map((prod) => (
+        {filteredProducts.map((prod, idx) => (
           <motion.div
-            key={prod.id}
+            key={`inv-prod-${prod.id}-${idx}`}
             layout
             className="relative flex flex-col rounded-2xl border border-brand-tertiary bg-brand-secondary shadow-lg overflow-hidden group"
             id={`inv-card-${prod.id}`}
@@ -452,8 +481,19 @@ export default function InventoryView({
                   </button>
                 </div>
 
-                {/* Edit & Delete actions */}
+                {/* Print Tag, Edit & Delete actions */}
                 <div className="flex items-center gap-1" id={`inv-edit-delete-${prod.id}`}>
+                  {onOpenPrintTag && (
+                    <button
+                      onClick={() => onOpenPrintTag(prod)}
+                      className="p-2 rounded-lg bg-brand-bg hover:bg-brand-primary/20 border border-brand-tertiary/60 text-gray-400 hover:text-brand-primary transition cursor-pointer"
+                      title="Imprimir Etiqueta de Código de Barras"
+                      id={`inv-btn-print-${prod.id}`}
+                    >
+                      <Printer className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+
                   <button
                     onClick={() => handleOpenEdit(prod)}
                     className="p-2 rounded-lg bg-brand-bg hover:bg-brand-tertiary border border-brand-tertiary/60 text-gray-400 hover:text-brand-primary transition cursor-pointer"
@@ -638,8 +678,8 @@ export default function InventoryView({
                               id="inv-modal-select-cat"
                               required
                             >
-                              {categories.map((cat) => (
-                                <option key={cat} value={cat}>
+                              {categories.map((cat, idx) => (
+                                <option key={`cat-opt-${cat}-${idx}`} value={cat}>
                                   {cat}
                                 </option>
                               ))}
@@ -673,8 +713,8 @@ export default function InventoryView({
                         className="w-full bg-brand-bg border border-brand-tertiary rounded-xl px-3 py-2 text-xs text-brand-neutral focus:outline-none focus:border-brand-primary"
                         id="inv-modal-select-supplier"
                       >
-                        {suppliers.map((sup) => (
-                          <option key={sup} value={sup}>
+                        {suppliers.map((sup, idx) => (
+                          <option key={`sup-opt-${sup}-${idx}`} value={sup}>
                             {sup}
                           </option>
                         ))}
@@ -886,9 +926,9 @@ export default function InventoryView({
                       Nenhuma categoria criada manualmente.
                     </div>
                   ) : (
-                    categories.map((cat) => (
+                    categories.map((cat, idx) => (
                       <div
-                        key={cat}
+                        key={`cat-mgr-${cat}-${idx}`}
                         className="flex items-center justify-between p-2.5 bg-brand-bg/40 border border-brand-tertiary/30 rounded-xl hover:border-brand-tertiary transition"
                       >
                         {editingCatName === cat ? (
@@ -1077,9 +1117,9 @@ export default function InventoryView({
                       Nenhum fornecedor cadastrado.
                     </div>
                   ) : (
-                    suppliers.map((sup) => (
+                    suppliers.map((sup, idx) => (
                       <div
-                        key={sup}
+                        key={`sup-mgr-${sup}-${idx}`}
                         className="flex items-center justify-between p-2.5 bg-brand-bg/40 border border-brand-tertiary/30 rounded-xl hover:border-brand-tertiary transition"
                       >
                         {editingSupName === sup ? (

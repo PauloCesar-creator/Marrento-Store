@@ -303,8 +303,8 @@ export default function EntryFormView({
                     required
                   >
                     <option value="" disabled>Selecione o Fornecedor...</option>
-                    {suppliers.map((sup) => (
-                      <option key={sup} value={sup}>{sup}</option>
+                    {suppliers.map((sup, idx) => (
+                      <option key={`entry-sup-${sup}-${idx}`} value={sup}>{sup}</option>
                     ))}
                   </select>
                   <button
@@ -372,8 +372,8 @@ export default function EntryFormView({
                         id="entry-form-select-cat"
                         required
                       >
-                        {categories.map((cat) => (
-                          <option key={cat} value={cat}>{cat}</option>
+                        {categories.map((cat, idx) => (
+                          <option key={`entry-cat-${cat}-${idx}`} value={cat}>{cat}</option>
                         ))}
                         {categories.length === 0 && (
                           <option value="">-- Crie uma categoria --</option>
@@ -501,9 +501,9 @@ export default function EntryFormView({
 
         {/* History list */}
         <div className="space-y-2.5" id="entry-recent-list">
-          {entriesHistory.slice(0, 5).map((entry) => (
+          {entriesHistory.slice(0, 5).map((entry, idx) => (
             <div
-              key={entry.id}
+              key={`entry-hist-${entry.id}-${idx}`}
               className="flex items-center justify-between p-3 bg-brand-secondary rounded-xl border border-brand-tertiary/40 shadow-sm hover:border-brand-primary/10 transition"
               id={`entry-history-item-${entry.id}`}
             >

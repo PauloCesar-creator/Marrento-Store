@@ -338,9 +338,9 @@ export default function SmartPanelModal({
                     </button>
 
                     {/* Variations list thumbnails */}
-                    {variants.map((v) => (
+                    {variants.map((v, idx) => (
                       <button
-                        key={v.id}
+                        key={`var-thumb-${v.id}-${idx}`}
                         onClick={() => setSelectedVariantId(v.id)}
                         className={`relative shrink-0 snap-start w-14 h-14 rounded-lg overflow-hidden border-2 transition cursor-pointer ${
                           selectedVariantId === v.id
@@ -398,11 +398,11 @@ export default function SmartPanelModal({
                           Nenhuma variação criada ainda. Adicione uma abaixo!
                         </p>
                       ) : (
-                        variants.map((v) => {
+                        variants.map((v, idx) => {
                           const isSelected = selectedVariantId === v.id;
                           return (
                             <button
-                              key={v.id}
+                              key={`var-pill-${v.id}-${idx}`}
                               type="button"
                               onClick={() => setSelectedVariantId(v.id)}
                               className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs transition cursor-pointer ${
@@ -553,13 +553,13 @@ export default function SmartPanelModal({
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" id="variants-grid">
-                  {variants.map((v) => {
+                  {variants.map((v, idx) => {
                     const isEditing = editingVarId === v.id;
                     const isSelected = selectedVariantId === v.id;
 
                     return (
                       <div
-                        key={v.id}
+                        key={`var-card-${v.id}-${idx}`}
                         className={`p-3 rounded-xl border transition flex flex-col justify-between ${
                           isSelected
                             ? 'bg-brand-primary/10 border-brand-primary'

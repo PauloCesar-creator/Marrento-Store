@@ -31,3 +31,37 @@
   background: #D4AF37;
 }
 
+/* Print CSS rules for Thermal Tag Labels and Receipts */
+@media print {
+  body {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  /* Hide screen app UI elements when printing */
+  #app-container,
+  #print-tag-overlay,
+  #print-receipt-overlay,
+  #barcode-modal-overlay,
+  header,
+  footer,
+  nav,
+  button {
+    display: none !important;
+  }
+
+  /* Show printable areas */
+  #printable-tag-area,
+  #printable-receipt-area {
+    display: block !important;
+    position: static !important;
+    width: 100% !important;
+    background-color: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  .page-break-inside-avoid {
+    page-break-inside: avoid;
+  }
+}
+

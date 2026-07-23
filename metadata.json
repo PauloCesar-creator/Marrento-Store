@@ -1,6 +1,8 @@
 {
-  "name": "Painel de Estoque Marento",
+  "name": "Painel de Estoque Marento - IMPRESSORA E BIP",
   "description": "Painel de controle de estoque de luxo com controle de entradas e saídas, cálculo de saldos em tempo real, notificações de estoque mínimo e relatórios mensais.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

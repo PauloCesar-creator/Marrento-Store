@@ -6,10 +6,13 @@ import {
   ArrowUpRight,
   BarChart3,
   Bell,
-  Sparkles
+  Sparkles,
+  Barcode,
+  Printer,
+  Database
 } from 'lucide-react';
 
-import { Product, Transaction, Notification, CategoryName } from './types';
+import { Product, Transaction, Notification, CategoryName, ProductVariant } from './types';
 import { INITIAL_PRODUCTS, INITIAL_TRANSACTIONS, SUPPLIERS } from './data';
 
 import DashboardView from './components/DashboardView';
@@ -18,6 +21,24 @@ import EntryFormView from './components/EntryFormView';
 import ReportsView from './components/ReportsView';
 import NotificationPanel from './components/NotificationPanel';
 import OperationModal from './components/OperationModal';
+import BarcodeScannerModal from './components/BarcodeScannerModal';
+import PrintTagModal from './components/PrintTagModal';
+import PrintReceiptModal from './components/PrintReceiptModal';
+import DatabaseStatusModal from './components/DatabaseStatusModal';
+import { useBarcodeScanner } from './utils/useBarcodeScanner';
+import {
+  dbFetchCategories,
+  dbAddCategory,
+  dbDeleteCategory,
+  dbFetchSuppliers,
+  dbAddSupplier,
+  dbDeleteSupplier,
+  dbFetchProducts,
+  dbSaveProduct,
+  dbDeleteProduct,
+  dbFetchTransactions,
+  dbSaveTransaction
+} from './lib/dbService';
 
 export default function App() {
   // 1. Core Persistent States (with localStorage fallback)
@@ -36,13 +57,15 @@ export default function App() {
   // Dynamic categories state - started empty (excluir as categorias) as requested
   const [categories, setCategories] = useState<string[]>(() => {
     const saved = localStorage.getItem('marento_categories');
-    return saved ? JSON.parse(saved) : [];
+    const parsed: string[] = saved ? JSON.parse(saved) : [];
+    return Array.from(new Set(parsed.filter(Boolean)));
   });
 
   // Dynamic suppliers state - initialized with values from data.ts
   const [suppliers, setSuppliers] = useState<string[]>(() => {
     const saved = localStorage.getItem('marento_suppliers');
-    return saved ? JSON.parse(saved) : SUPPLIERS.map((s) => s.name);
+    const parsed: string[] = saved ? JSON.parse(saved) : SUPPLIERS.map((s) => s.name);
+    return Array.from(new Set(parsed.filter(Boolean)));
   });
 
   // 2. Navigation & UI States
@@ -54,6 +77,34 @@ export default function App() {
   const [isQuickOpOpen, setIsQuickOpOpen] = useState(false);
   const [quickOpProductId, setQuickOpProductId] = useState<string | undefined>(undefined);
   const [quickOpType, setQuickOpType] = useState<'entrada' | 'saida'>('entrada');
+
+  // 4. Barcode Scanner, Database & Printer Modals States
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [isDbStatusOpen, setIsDbStatusOpen] = useState(false);
+  const [printTagProduct, setPrintTagProduct] = useState<Product | null>(null);
+  const [printTagVariant, setPrintTagVariant] = useState<ProductVariant | null>(null);
+  const [isPrintTagOpen, setIsPrintTagOpen] = useState(false);
+  const [printReceiptTx, setPrintReceiptTx] = useState<Transaction | null>(null);
+  const [isPrintReceiptOpen, setIsPrintReceiptOpen] = useState(false);
+
+  // Global Plug & Play USB/Bluetooth Barcode Scanner Listener
+  useBarcodeScanner({
+    onScan: () => {
+      setIsScannerOpen(true);
+    },
+    enabled: true,
+  });
+
+  const handleOpenPrintTag = (prod: Product, variant?: ProductVariant) => {
+    setPrintTagProduct(prod);
+    setPrintTagVariant(variant || null);
+    setIsPrintTagOpen(true);
+  };
+
+  const handleOpenPrintReceipt = (tx: Transaction) => {
+    setPrintReceiptTx(tx);
+    setIsPrintReceiptOpen(true);
+  };
 
   // Sync state to localStorage on any state modification
   useEffect(() => {
@@ -72,8 +123,49 @@ export default function App() {
     localStorage.setItem('marento_suppliers', JSON.stringify(suppliers));
   }, [suppliers]);
 
+  // Initial Sync from Supabase on load
+  useEffect(() => {
+    async function loadFromSupabase() {
+      try {
+        const [remoteCats, remoteSups, remoteProds, remoteTxs] = await Promise.all([
+          dbFetchCategories(),
+          dbFetchSuppliers(),
+          dbFetchProducts(),
+          dbFetchTransactions()
+        ]);
+
+        if (remoteCats.length > 0) {
+          setCategories((prev) => Array.from(new Set([...prev, ...remoteCats])));
+        }
+        if (remoteSups.length > 0) {
+          setSuppliers((prev) => Array.from(new Set([...prev, ...remoteSups])));
+        }
+        if (remoteProds.length > 0) {
+          setProducts((prev) => {
+            // merge or replace if remote exists
+            const map = new Map<string, Product>();
+            prev.forEach((p) => map.set(p.id, p));
+            remoteProds.forEach((p) => map.set(p.id, p));
+            return Array.from(map.values());
+          });
+        }
+        if (remoteTxs.length > 0) {
+          setTransactions((prev) => {
+            const map = new Map<string, Transaction>();
+            prev.forEach((t) => map.set(t.id, t));
+            remoteTxs.forEach((t) => map.set(t.id, t));
+            return Array.from(map.values());
+          });
+        }
+      } catch (e) {
+        console.warn('Initial Supabase fetch attempt completed with warnings:', e);
+      }
+    }
+    loadFromSupabase();
+  }, []);
+
   // Add custom category
-  const handleAddCategory = (name: string) => {
+  const handleAddCategory = async (name: string) => {
     const cleanName = name.trim();
     if (!cleanName) return;
     if (categories.some((c) => c.toLowerCase() === cleanName.toLowerCase())) {
@@ -81,23 +173,25 @@ export default function App() {
       return;
     }
     setCategories((prev) => [...prev, cleanName]);
+    // Save to Supabase
+    await dbAddCategory(cleanName);
   };
 
   // Delete custom category
-  const handleDeleteCategory = (name: string) => {
-    // Avoid using iframe-blocking confirm()
+  const handleDeleteCategory = async (name: string) => {
     setCategories((prev) => prev.filter((c) => c !== name));
     if (selectedCategory === name) {
       setSelectedCategory('Todos');
     }
+    // Delete from Supabase
+    await dbDeleteCategory(name);
   };
 
   // Edit/rename custom category
-  const handleEditCategory = (oldName: string, newName: string) => {
+  const handleEditCategory = async (oldName: string, newName: string) => {
     const cleanNewName = newName.trim();
     if (!cleanNewName || oldName === cleanNewName) return;
     
-    // Check if new name already exists
     if (categories.some((c) => c.toLowerCase() === cleanNewName.toLowerCase())) {
       alert('Esta categoria já existe!');
       return;
@@ -108,10 +202,14 @@ export default function App() {
     if (selectedCategory === oldName) {
       setSelectedCategory(cleanNewName);
     }
+
+    // Sync deletion of old and addition of new to Supabase
+    await dbDeleteCategory(oldName);
+    await dbAddCategory(cleanNewName);
   };
 
   // Add custom supplier
-  const handleAddSupplier = (name: string) => {
+  const handleAddSupplier = async (name: string) => {
     const cleanName = name.trim();
     if (!cleanName) return;
     if (suppliers.some((s) => s.toLowerCase() === cleanName.toLowerCase())) {
@@ -119,15 +217,17 @@ export default function App() {
       return;
     }
     setSuppliers((prev) => [...prev, cleanName]);
+    await dbAddSupplier(cleanName);
   };
 
   // Delete supplier
-  const handleDeleteSupplier = (name: string) => {
+  const handleDeleteSupplier = async (name: string) => {
     setSuppliers((prev) => prev.filter((s) => s !== name));
+    await dbDeleteSupplier(name);
   };
 
   // Edit/rename supplier
-  const handleEditSupplier = (oldName: string, newName: string) => {
+  const handleEditSupplier = async (oldName: string, newName: string) => {
     const cleanNewName = newName.trim();
     if (!cleanNewName || oldName === cleanNewName) return;
 
@@ -142,6 +242,9 @@ export default function App() {
         prod.supplier === oldName ? { ...prod, supplier: cleanNewName } : prod
       )
     );
+
+    await dbDeleteSupplier(oldName);
+    await dbAddSupplier(cleanNewName);
   };
 
   // Run on first load to seed sample Rolex/Ultra9 item with variations if slate is empty
@@ -249,7 +352,7 @@ export default function App() {
 
   // 5. Actions / Mutators
   // Add product
-  const handleAddProduct = (newProd: Omit<Product, 'id' | 'salesCount' | 'createdAt'>) => {
+  const handleAddProduct = async (newProd: Omit<Product, 'id' | 'salesCount' | 'createdAt'>) => {
     const product: Product = {
       ...newProd,
       id: `prod-${Date.now()}`,
@@ -258,6 +361,9 @@ export default function App() {
     };
     setProducts((prev) => [product, ...prev]);
 
+    // Save product to Supabase
+    await dbSaveProduct(product);
+
     // Push automatic creation transaction
     if (newProd.quantity > 0) {
       handleRecordTransaction(product.id, 'entrada', newProd.quantity, newProd.price);
@@ -265,21 +371,22 @@ export default function App() {
   };
 
   // Edit product
-  const handleEditProduct = (updatedProd: Product) => {
+  const handleEditProduct = async (updatedProd: Product) => {
     setProducts((prev) =>
       prev.map((p) => (p.id === updatedProd.id ? updatedProd : p))
     );
+    await dbSaveProduct(updatedProd);
   };
 
   // Delete product
-  const handleDeleteProduct = (id: string) => {
+  const handleDeleteProduct = async (id: string) => {
     setProducts((prev) => prev.filter((p) => p.id !== id));
-    // Filter transactions associated
     setTransactions((prev) => prev.filter((t) => t.productId !== id));
+    await dbDeleteProduct(id);
   };
 
   // Perform entries and exits - update balances instantly
-  const handleRecordTransaction = (
+  const handleRecordTransaction = async (
     productId: string,
     type: 'entrada' | 'saida',
     qty: number,
@@ -294,17 +401,22 @@ export default function App() {
       return;
     }
 
+    const updatedQty = type === 'entrada' ? prod.quantity + qty : prod.quantity - qty;
+    const updatedSales = type === 'saida' ? prod.salesCount + qty : prod.salesCount;
+    const updatedProduct: Product = {
+      ...prod,
+      quantity: updatedQty,
+      price: price,
+      salesCount: updatedSales
+    };
+
     // Update quantity & sales count on product state
     setProducts((prev) =>
-      prev.map((p) => {
-        if (p.id === productId) {
-          const updatedQty = type === 'entrada' ? p.quantity + qty : p.quantity - qty;
-          const updatedSales = type === 'saida' ? p.salesCount + qty : p.salesCount;
-          return { ...p, quantity: updatedQty, price: price, salesCount: updatedSales };
-        }
-        return p;
-      })
+      prev.map((p) => (p.id === productId ? updatedProduct : p))
     );
+
+    // Sync updated stock to Supabase
+    await dbSaveProduct(updatedProduct);
 
     // Push entry to transactions history
     const tx: Transaction = {
@@ -322,6 +434,9 @@ export default function App() {
     };
 
     setTransactions((prev) => [tx, ...prev]);
+
+    // Save transaction to Supabase
+    await dbSaveTransaction(tx);
   };
 
   // Open transaction wizard modal
@@ -357,33 +472,59 @@ export default function App() {
             </div>
           </div>
 
-          {/* Interactive Bell dropdown area */}
-          <div className="relative" id="header-right-bell">
+          {/* Header Action Buttons: Leitor, Status do Banco & Bell */}
+          <div className="flex items-center gap-2" id="header-right-actions">
+            
+            {/* Status do Banco Button */}
             <button
-              onClick={() => setIsNotifOpen(!isNotifOpen)}
-              className="relative p-2.5 rounded-full bg-brand-secondary border border-brand-tertiary hover:border-brand-primary hover:text-brand-primary transition shadow-md cursor-pointer"
-              title="Notificações de Estoque"
-              id="header-bell-btn"
+              onClick={() => setIsDbStatusOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-brand-secondary border border-emerald-500/50 text-emerald-400 hover:bg-emerald-500 hover:text-black transition shadow-md cursor-pointer font-bold text-xs"
+              title="Verificar Conexão com o Banco Supabase"
+              id="header-db-status-btn"
             >
-              <Bell className="w-5 h-5 text-brand-primary" />
-              
-              {unreadCount > 0 && (
-                <span className="absolute top-1 right-1 flex h-2.5 w-2.5" id="header-bell-pulsing-badge">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-red opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-brand-red"></span>
-                </span>
-              )}
+              <Database className="w-4 h-4" />
+              <span className="hidden sm:inline">Status do Banco</span>
             </button>
 
-            {/* Float notification panel */}
-            <NotificationPanel
-              notifications={notifications}
-              onMarkAsRead={handleMarkAsRead}
-              onMarkAllAsRead={handleMarkAllAsRead}
-              onTriggerReplenish={handleTriggerReplenish}
-              isOpen={isNotifOpen}
-              onClose={() => setIsNotifOpen(false)}
-            />
+            {/* Leitor de Código de Barras Bipar Button */}
+            <button
+              onClick={() => setIsScannerOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-brand-secondary border border-brand-primary/60 text-brand-primary hover:bg-brand-primary hover:text-black transition shadow-md cursor-pointer font-bold text-xs"
+              title="Abrir Leitor de Código de Barras Plug & Play"
+              id="header-scanner-btn"
+            >
+              <Barcode className="w-4 h-4" />
+              <span className="hidden sm:inline">Modo Bipar</span>
+            </button>
+
+            {/* Interactive Bell dropdown area */}
+            <div className="relative" id="header-right-bell">
+              <button
+                onClick={() => setIsNotifOpen(!isNotifOpen)}
+                className="relative p-2.5 rounded-full bg-brand-secondary border border-brand-tertiary hover:border-brand-primary hover:text-brand-primary transition shadow-md cursor-pointer"
+                title="Notificações de Estoque"
+                id="header-bell-btn"
+              >
+                <Bell className="w-5 h-5 text-brand-primary" />
+                
+                {unreadCount > 0 && (
+                  <span className="absolute top-1 right-1 flex h-2.5 w-2.5" id="header-bell-pulsing-badge">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-red opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-brand-red"></span>
+                  </span>
+                )}
+              </button>
+
+              {/* Float notification panel */}
+              <NotificationPanel
+                notifications={notifications}
+                onMarkAsRead={handleMarkAsRead}
+                onMarkAllAsRead={handleMarkAllAsRead}
+                onTriggerReplenish={handleTriggerReplenish}
+                isOpen={isNotifOpen}
+                onClose={() => setIsNotifOpen(false)}
+              />
+            </div>
           </div>
 
         </div>
@@ -429,6 +570,8 @@ export default function App() {
                 onAddCategory={handleAddCategory}
                 onDeleteCategory={handleDeleteCategory}
                 onEditCategory={handleEditCategory}
+                onOpenBarcodeScanner={() => setIsScannerOpen(true)}
+                onOpenPrintTag={handleOpenPrintTag}
               />
             )}
 
@@ -518,6 +661,36 @@ export default function App() {
         initialProductId={quickOpProductId}
         initialType={quickOpType}
         onConfirm={handleRecordTransaction}
+      />
+
+      {/* 5. Plug & Play Barcode Scanner Modal */}
+      <BarcodeScannerModal
+        isOpen={isScannerOpen}
+        onClose={() => setIsScannerOpen(false)}
+        products={products}
+        onOpenQuickOp={handleOpenQuickOp}
+        onOpenPrintTag={handleOpenPrintTag}
+      />
+
+      {/* 6. Thermal Barcode Label / Tag Printer Modal */}
+      <PrintTagModal
+        isOpen={isPrintTagOpen}
+        onClose={() => setIsPrintTagOpen(false)}
+        product={printTagProduct}
+        selectedVariant={printTagVariant}
+      />
+
+      {/* 7. Thermal Receipt / Movement Voucher Printer Modal */}
+      <PrintReceiptModal
+        isOpen={isPrintReceiptOpen}
+        onClose={() => setIsPrintReceiptOpen(false)}
+        transaction={printReceiptTx}
+      />
+
+      {/* 8. Database Status & Health Checker Modal */}
+      <DatabaseStatusModal
+        isOpen={isDbStatusOpen}
+        onClose={() => setIsDbStatusOpen(false)}
       />
 
     </div>

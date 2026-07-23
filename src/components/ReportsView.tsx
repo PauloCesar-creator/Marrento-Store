@@ -267,7 +267,7 @@ Fim do Relatório - Marento Store Luxury Control
             {/* Data Dots */}
             {points.map((pt, idx) => (
               <circle
-                key={idx}
+                key={`rpt-pt-${idx}`}
                 cx={pt.x}
                 cy={pt.y}
                 r={idx === points.length - 1 ? "4" : "2.5"}
@@ -281,8 +281,8 @@ Fim do Relatório - Marento Store Luxury Control
 
         {/* Chart X Axis days */}
         <div className="flex justify-between px-1.5 mt-2.5 text-[9px] font-mono font-medium text-gray-500" id="reports-chart-xaxis">
-          {chartDays.map((day) => (
-            <span key={day}>{day}</span>
+          {chartDays.map((day, idx) => (
+            <span key={`rpt-day-${day}-${idx}`}>{day}</span>
           ))}
         </div>
       </div>
@@ -360,9 +360,9 @@ Fim do Relatório - Marento Store Luxury Control
         </h3>
 
         <div className="space-y-2.5" id="reports-tops-list">
-          {topProducts.map((p) => (
+          {topProducts.map((p, idx) => (
             <div
-              key={p.id}
+              key={`rpt-top-${p.id}-${idx}`}
               className="flex items-center justify-between p-3 bg-brand-secondary rounded-xl border border-brand-tertiary/40 shadow-sm"
               id={`reports-top-${p.id}`}
             >

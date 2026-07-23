@@ -76,9 +76,9 @@ export default function NotificationPanel({
                     <p className="text-[10px] mt-0.5">O sistema avisará se houver itens abaixo do estoque mínimo.</p>
                   </div>
                 ) : (
-                  notifications.map((notif) => (
+                  notifications.map((notif, idx) => (
                     <div
-                      key={notif.id}
+                      key={`notif-${notif.id}-${idx}`}
                       className={`relative flex gap-3 p-3 rounded-lg border transition ${
                         notif.read
                           ? 'bg-brand-bg/40 border-brand-tertiary/50 opacity-75'
