@@ -9,7 +9,10 @@ import {
   Sparkles,
   Barcode,
   Printer,
-  Database
+  Database,
+  User,
+  UserCheck,
+  Lock
 } from 'lucide-react';
 
 import { Product, Transaction, Notification, CategoryName, ProductVariant } from './types';
@@ -25,6 +28,7 @@ import BarcodeScannerModal from './components/BarcodeScannerModal';
 import PrintTagModal from './components/PrintTagModal';
 import PrintReceiptModal from './components/PrintReceiptModal';
 import DatabaseStatusModal from './components/DatabaseStatusModal';
+import LoginModal from './components/LoginModal';
 import { useBarcodeScanner } from './utils/useBarcodeScanner';
 import {
   dbFetchCategories,
@@ -72,6 +76,34 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'Dashboard' | 'Estoque' | 'Entradas' | 'Relatórios'>('Dashboard');
   const [selectedCategory, setSelectedCategory] = useState<CategoryName | 'Todos'>('Todos');
   const [isNotifOpen, setIsNotifOpen] = useState(false);
+
+  // Authentication State (Persistent via localStorage)
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    return localStorage.getItem('marento_auth_token') === 'logged_in_admin';
+  });
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+
+  const handleTabClick = (tab: 'Dashboard' | 'Estoque' | 'Entradas' | 'Relatórios') => {
+    if (tab === 'Relatórios' && !isAuthenticated) {
+      setIsLoginModalOpen(true);
+      return;
+    }
+    setActiveTab(tab);
+  };
+
+  const handleLoginSuccess = () => {
+    setIsAuthenticated(true);
+    setActiveTab('Relatórios');
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('marento_auth_user');
+    localStorage.removeItem('marento_auth_token');
+    setIsAuthenticated(false);
+    if (activeTab === 'Relatórios') {
+      setActiveTab('Dashboard');
+    }
+  };
 
   // 3. Quick Operation Modal States
   const [isQuickOpOpen, setIsQuickOpOpen] = useState(false);
@@ -525,6 +557,28 @@ export default function App() {
                 onClose={() => setIsNotifOpen(false)}
               />
             </div>
+
+            {/* User Icon Button (Ao lado direito da notificação) */}
+            {isAuthenticated ? (
+              <button
+                onClick={handleLogout}
+                className="flex items-center gap-1.5 p-2 rounded-full bg-emerald-950/40 border border-emerald-500/50 text-emerald-400 hover:bg-rose-950/40 hover:border-rose-500/50 hover:text-rose-400 transition shadow-md cursor-pointer text-xs font-bold"
+                title="Clique para Sair (Logout)"
+                id="header-user-logout-btn"
+              >
+                <UserCheck className="w-5 h-5 text-emerald-400" />
+                <span className="hidden sm:inline pr-1">admin</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => setIsLoginModalOpen(true)}
+                className="p-2.5 rounded-full bg-brand-secondary border border-brand-primary/60 text-brand-primary hover:bg-brand-primary hover:text-black transition shadow-md cursor-pointer"
+                title="Login de Acesso aos Relatórios"
+                id="header-user-login-btn"
+              >
+                <User className="w-5 h-5" />
+              </button>
+            )}
           </div>
 
         </div>
@@ -547,7 +601,7 @@ export default function App() {
                 transactions={transactions}
                 categories={categories}
                 onSelectCategory={setSelectedCategory}
-                onNavigateToTab={setActiveTab}
+                onNavigateToTab={(tab) => handleTabClick(tab as any)}
                 onOpenQuickOp={handleOpenQuickOp}
                 onAddCategory={handleAddCategory}
               />
@@ -589,10 +643,29 @@ export default function App() {
             )}
 
             {activeTab === 'Relatórios' && (
-              <ReportsView
-                products={products}
-                transactions={transactions}
-              />
+              isAuthenticated ? (
+                <ReportsView
+                  products={products}
+                  transactions={transactions}
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center py-16 px-4 text-center space-y-4 bg-brand-secondary/40 border border-brand-tertiary rounded-2xl max-w-md mx-auto" id="protected-reports-gate">
+                  <div className="p-4 rounded-2xl bg-brand-primary/10 border border-brand-primary/20 text-brand-primary">
+                    <Lock className="w-10 h-10" />
+                  </div>
+                  <h3 className="font-serif font-bold text-xl text-brand-neutral">Acesso Restrito</h3>
+                  <p className="text-xs text-gray-400 max-w-xs leading-relaxed">
+                    Apenas usuários autenticados têm acesso ao módulo de Relatórios e métricas avançadas do sistema.
+                  </p>
+                  <button
+                    onClick={() => setIsLoginModalOpen(true)}
+                    className="px-6 py-2.5 rounded-xl bg-brand-primary text-black font-bold text-xs hover:bg-brand-primary/90 transition shadow-lg cursor-pointer"
+                    id="gate-login-btn"
+                  >
+                    Fazer Login como Admin
+                  </button>
+                </div>
+              )
             )}
           </motion.div>
         </AnimatePresence>
@@ -604,7 +677,7 @@ export default function App() {
           
           {/* Dashboard Tab */}
           <button
-            onClick={() => setActiveTab('Dashboard')}
+            onClick={() => handleTabClick('Dashboard')}
             className={`flex flex-col items-center gap-1 py-1 px-3 text-center transition cursor-pointer group ${
               activeTab === 'Dashboard' ? 'text-brand-primary' : 'text-gray-500 hover:text-brand-neutral'
             }`}
@@ -616,7 +689,7 @@ export default function App() {
 
           {/* Estoque Tab */}
           <button
-            onClick={() => setActiveTab('Estoque')}
+            onClick={() => handleTabClick('Estoque')}
             className={`flex flex-col items-center gap-1 py-1 px-3 text-center transition cursor-pointer group ${
               activeTab === 'Estoque' ? 'text-brand-primary' : 'text-gray-500 hover:text-brand-neutral'
             }`}
@@ -628,7 +701,7 @@ export default function App() {
 
           {/* Entradas Tab */}
           <button
-            onClick={() => setActiveTab('Entradas')}
+            onClick={() => handleTabClick('Entradas')}
             className={`flex flex-col items-center gap-1 py-1 px-3 text-center transition cursor-pointer group ${
               activeTab === 'Entradas' ? 'text-brand-primary' : 'text-gray-500 hover:text-brand-neutral'
             }`}
@@ -640,7 +713,7 @@ export default function App() {
 
           {/* Relatórios Tab */}
           <button
-            onClick={() => setActiveTab('Relatórios')}
+            onClick={() => handleTabClick('Relatórios')}
             className={`flex flex-col items-center gap-1 py-1 px-3 text-center transition cursor-pointer group ${
               activeTab === 'Relatórios' ? 'text-brand-primary' : 'text-gray-500 hover:text-brand-neutral'
             }`}
@@ -691,6 +764,13 @@ export default function App() {
       <DatabaseStatusModal
         isOpen={isDbStatusOpen}
         onClose={() => setIsDbStatusOpen(false)}
+      />
+
+      {/* 9. Login / Auth Modal */}
+      <LoginModal
+        isOpen={isLoginModalOpen}
+        onClose={() => setIsLoginModalOpen(false)}
+        onLoginSuccess={handleLoginSuccess}
       />
 
     </div>

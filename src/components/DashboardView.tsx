@@ -1,9 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import {
-  Wallet,
   AlertTriangle,
-  TrendingUp,
+  ShoppingBag,
   ArrowUpRight,
   ArrowDownLeft,
   ChevronRight,
@@ -13,10 +12,11 @@ import {
   Wind,
   Plus,
   Package,
-  Award
+  Award,
+  Layers,
+  Box
 } from 'lucide-react';
 import { Product, Transaction, CategoryName } from '../types';
-import { useState } from 'react';
 
 interface DashboardViewProps {
   products: Product[];
@@ -39,26 +39,22 @@ export default function DashboardView({
 }: DashboardViewProps) {
   const [isAddingCategory, setIsAddingCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
-  
-  // Calculate real-time total stock value
-  const totalStockValue = products.reduce((acc, p) => acc + (p.price * p.quantity), 0);
+
+  // Calculate total units sold (sum of quantity for all 'saida' transactions)
+  const totalUnitsSold = transactions
+    .filter((t) => t.type === 'saida')
+    .reduce((acc, t) => acc + t.quantity, 0);
+
+  // Calculate total units entered (sum of quantity for all 'entrada' transactions)
+  const totalUnitsEntered = transactions
+    .filter((t) => t.type === 'entrada')
+    .reduce((acc, t) => acc + t.quantity, 0);
+
+  // Calculate total current stock items count
+  const totalItemsInStock = products.reduce((acc, p) => acc + p.quantity, 0);
 
   // Count items below minimum stock
   const lowStockCount = products.filter((p) => p.quantity <= p.minStock).length;
-
-  // Calculate total exits / sales
-  const salesToday = transactions
-    .filter((t) => t.type === 'saida')
-    .reduce((acc, t) => acc + (t.price * t.quantity), 0);
-
-  // Format currency
-  const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL',
-      minimumFractionDigits: 2,
-    }).format(val);
-  };
 
   // Dynamic category styling helper
   const getCategoryMeta = (catName: string) => {
@@ -101,53 +97,98 @@ export default function DashboardView({
     setIsAddingCategory(false);
   };
 
+  // Helper to find product image for a transaction
+  const getProductForTx = (tx: Transaction): Product | undefined => {
+    if (tx.productId) {
+      const found = products.find((p) => p.id === tx.productId);
+      if (found) return found;
+    }
+    if (tx.sku) {
+      const foundBySku = products.find((p) => p.sku.toLowerCase() === tx.sku.toLowerCase());
+      if (foundBySku) return foundBySku;
+    }
+    return products.find((p) => p.name.toLowerCase() === tx.productName.toLowerCase());
+  };
+
   return (
     <div className="space-y-6 pb-24" id="dashboard-view-root">
       
-      {/* 1. Header Hero with quick summary */}
+      {/* 1. Header Hero */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3" id="dash-welcome">
         <div className="space-y-1" id="dash-welcome-text">
           <h2 className="font-serif font-semibold text-2xl text-brand-neutral tracking-tight" id="dash-welcome-title">
-            Painel Geral
+            Painel Geral de Estoque
           </h2>
           <p className="text-xs text-gray-500 font-sans" id="dash-welcome-subtitle">
-            Balanço financeiro e fluxo de movimentação em tempo real.
+            Acompanhamento de volume de vendas e movimentação em tempo real.
           </p>
         </div>
       </div>
 
-      {/* 2. Primary Stock Value Card (High Contrast) */}
+      {/* 2. Primary "Número de Vendas" Card (High Contrast) */}
       <motion.div
         initial={{ opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
-        className="relative overflow-hidden rounded-2xl bg-brand-secondary p-6 border border-brand-tertiary/60 shadow-xl"
-        id="dash-total-card"
+        className="relative overflow-hidden rounded-2xl bg-brand-secondary p-6 border border-brand-primary/40 shadow-xl"
+        id="dash-sales-number-card"
       >
-        {/* Subtle decorative glowing circle in background */}
-        <div className="absolute -right-16 -top-16 w-36 h-36 rounded-full bg-brand-primary/5 blur-3xl" />
+        <div className="absolute -right-16 -top-16 w-36 h-36 rounded-full bg-brand-primary/10 blur-3xl" />
 
-        <div className="flex items-center justify-between" id="dash-total-header">
-          <div className="space-y-2" id="dash-total-labels">
-            <span className="block text-[10px] tracking-widest font-bold uppercase text-gray-400 font-sans" id="dash-total-lbl">
-              VALOR TOTAL EM ESTOQUE
+        <div className="flex items-center justify-between" id="dash-sales-card-header">
+          <div className="space-y-2" id="dash-sales-card-labels">
+            <span className="block text-[10px] tracking-widest font-bold uppercase text-brand-primary font-sans" id="dash-sales-card-lbl">
+              NÚMERO DE VENDAS (SAÍDAS DE ESTOQUE)
             </span>
-            <span className="block font-serif font-semibold text-3xl sm:text-4xl text-brand-primary tracking-tight" id="dash-total-val">
-              {formatCurrency(totalStockValue)}
-            </span>
+            <div className="flex items-baseline gap-2">
+              <span className="font-serif font-semibold text-4xl sm:text-5xl text-brand-neutral tracking-tight" id="dash-sales-card-val">
+                {totalUnitsSold}
+              </span>
+              <span className="text-sm font-sans font-medium text-gray-400">
+                {totalUnitsSold === 1 ? 'peça vendida' : 'peças vendidas'}
+              </span>
+            </div>
+            <p className="text-xs text-gray-400 pt-1">
+              Total de produtos que saíram do estoque em vendas e expedições.
+            </p>
           </div>
 
-          <div className="rounded-xl bg-brand-tertiary/80 p-3 border border-brand-primary/10 shadow-lg" id="dash-total-icon-box">
-            <Wallet className="w-5 h-5 text-brand-primary" id="dash-total-icon" />
+          <div className="rounded-2xl bg-brand-primary/10 p-4 border border-brand-primary/20 shadow-lg shrink-0" id="dash-sales-card-icon-box">
+            <ShoppingBag className="w-8 h-8 text-brand-primary" id="dash-sales-card-icon" />
           </div>
         </div>
       </motion.div>
 
-      {/* 3. Small Stats row */}
+      {/* 3. Stats Row (Total em Estoque & Baixo Estoque) */}
       <div className="grid grid-cols-2 gap-3.5" id="dash-stats-grid">
-        {/* Low Stock Card */}
+        {/* Total em Estoque Card */}
         <motion.div
           initial={{ opacity: 0, x: -15 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.3, delay: 0.05 }}
+          onClick={() => onNavigateToTab('Estoque')}
+          className="group rounded-2xl bg-brand-secondary p-4 border border-brand-tertiary/50 hover:border-brand-primary/30 cursor-pointer transition-all duration-200"
+          id="dash-stock-total-card"
+        >
+          <div className="flex items-center gap-2 mb-2" id="dash-stock-total-header">
+            <div className="p-2 rounded-lg bg-brand-primary/10 text-brand-primary border border-brand-primary/10 group-hover:scale-105 transition" id="dash-stock-total-icon-box">
+              <Box className="w-4 h-4" />
+            </div>
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider" id="dash-stock-total-lbl">
+              ESTOQUE ATUAL
+            </span>
+          </div>
+          <span className="block font-serif text-xl sm:text-2xl text-brand-neutral font-medium" id="dash-stock-total-val">
+            {totalItemsInStock} {totalItemsInStock === 1 ? 'Peça' : 'Peças'}
+          </span>
+          <span className="text-[10px] text-brand-primary font-medium mt-1 inline-flex items-center gap-0.5" id="dash-stock-total-hint">
+            Ver catálogo completo <ChevronRight className="w-3 h-3" />
+          </span>
+        </motion.div>
+
+        {/* Low Stock Card */}
+        <motion.div
+          initial={{ opacity: 0, x: 15 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.3, delay: 0.05 }}
           onClick={() => onNavigateToTab('Estoque')}
@@ -169,31 +210,6 @@ export default function DashboardView({
             {lowStockCount > 0 ? 'Reposição imediata' : 'Nenhuma pendência'}
           </span>
         </motion.div>
-
-        {/* Sales Card */}
-        <motion.div
-          initial={{ opacity: 0, x: 15 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.3, delay: 0.05 }}
-          onClick={() => onNavigateToTab('Relatórios')}
-          className="group rounded-2xl bg-brand-secondary p-4 border border-brand-tertiary/50 hover:border-brand-primary/30 cursor-pointer transition-all duration-200"
-          id="dash-sales-card"
-        >
-          <div className="flex items-center gap-2 mb-2" id="dash-sales-header">
-            <div className="p-2 rounded-lg bg-brand-primary/10 text-brand-primary border border-brand-primary/10 group-hover:scale-105 transition" id="dash-sales-icon-box">
-              <TrendingUp className="w-4 h-4" />
-            </div>
-            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider" id="dash-sales-lbl">
-              VENDAS HOJE
-            </span>
-          </div>
-          <span className="block font-serif text-xl sm:text-2xl text-brand-neutral font-medium" id="dash-sales-val">
-            {formatCurrency(salesToday).replace(',00', '')}
-          </span>
-          <span className="text-[10px] text-brand-green font-medium mt-1 inline-flex items-center gap-0.5" id="dash-sales-growth">
-            Acompanhar metas <ChevronRight className="w-3 h-3" />
-          </span>
-        </motion.div>
       </div>
 
       {/* 4. Categorias em Destaque */}
@@ -207,14 +223,14 @@ export default function DashboardView({
               onSelectCategory('Todos');
               onNavigateToTab('Estoque');
             }}
-            className="text-xs text-brand-primary font-medium hover:underline flex items-center gap-1"
+            className="text-xs text-brand-primary font-medium hover:underline flex items-center gap-1 cursor-pointer"
             id="dash-categories-all-btn"
           >
             Ver Todas <ChevronRight className="w-3 h-3" />
           </button>
         </div>
 
-        {/* Circular categories list with quick routing */}
+        {/* Categories Grid */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3" id="dash-categories-list">
           {categories.map((catName, idx) => {
             const meta = getCategoryMeta(catName);
@@ -228,10 +244,10 @@ export default function DashboardView({
                   onSelectCategory(catName);
                   onNavigateToTab('Estoque');
                 }}
-                className="flex flex-col items-center p-3 rounded-2xl bg-brand-secondary/40 border border-brand-tertiary/30 hover:border-brand-primary/25 cursor-pointer transition text-center group"
+                className="flex flex-col items-center p-3.5 rounded-2xl bg-brand-secondary/40 border border-brand-tertiary/30 hover:border-brand-primary/30 cursor-pointer transition text-center group"
                 id={`dash-cat-${catName}`}
               >
-                <div className="w-12 h-12 rounded-full bg-brand-secondary border border-brand-tertiary flex items-center justify-center mb-1.5 shadow-md group-hover:border-brand-primary group-hover:bg-brand-tertiary/40 transition duration-200" id={`dash-cat-circle-${catName}`}>
+                <div className="w-12 h-12 rounded-full bg-brand-secondary border border-brand-tertiary flex items-center justify-center mb-2 shadow-md group-hover:border-brand-primary group-hover:bg-brand-tertiary/40 transition duration-200" id={`dash-cat-circle-${catName}`}>
                   {meta.icon}
                 </div>
                 <span className="text-xs font-bold text-brand-neutral truncate w-full" id={`dash-cat-name-${catName}`}>
@@ -244,7 +260,7 @@ export default function DashboardView({
             );
           })}
 
-          {/* Inline category creator card directly in the list! */}
+          {/* Inline Category Creator */}
           {isAddingCategory ? (
             <motion.form
               onSubmit={handleAddCategorySubmit}
@@ -265,7 +281,7 @@ export default function DashboardView({
               <div className="flex gap-1 w-full justify-center">
                 <button
                   type="submit"
-                  className="px-2 py-1 bg-brand-primary text-black text-[9px] font-bold rounded"
+                  className="px-2 py-1 bg-brand-primary text-black text-[9px] font-bold rounded cursor-pointer"
                   id="dash-cat-add-submit"
                 >
                   Salvar
@@ -273,7 +289,7 @@ export default function DashboardView({
                 <button
                   type="button"
                   onClick={() => setIsAddingCategory(false)}
-                  className="px-2 py-1 bg-brand-tertiary text-gray-400 text-[9px] font-semibold rounded hover:text-white"
+                  className="px-2 py-1 bg-brand-tertiary text-gray-400 text-[9px] font-semibold rounded hover:text-white cursor-pointer"
                   id="dash-cat-add-cancel"
                 >
                   Sair
@@ -292,89 +308,101 @@ export default function DashboardView({
             </motion.div>
           )}
         </div>
-
-        {categories.length === 0 && !isAddingCategory && (
-          <div className="text-center py-5 text-gray-500 bg-brand-secondary/10 rounded-xl border border-dashed border-brand-tertiary/60" id="dash-cat-empty-hint">
-            <p className="text-xs">Nenhuma categoria cadastrada ainda.</p>
-            <p className="text-[10px] text-gray-500 mt-1">Crie sua primeira categoria no botão acima para organizar o estoque.</p>
-          </div>
-        )}
       </div>
 
-      {/* 5. Atividade Recente (Flow of Entries/Exits) */}
+      {/* 5. Atividade Recente (Visual Cards with Product Images) */}
       <div className="space-y-3" id="dash-activity-container">
         <div className="flex items-center justify-between" id="dash-activity-header">
           <h3 className="font-serif font-semibold text-lg text-brand-neutral tracking-tight" id="dash-activity-title">
-            Atividade Recente
+            Atividade Recente (Entradas e Saídas)
           </h3>
           <button
             onClick={() => onNavigateToTab('Entradas')}
-            className="text-xs text-brand-primary font-medium hover:underline flex items-center gap-1"
+            className="text-xs text-brand-primary font-medium hover:underline flex items-center gap-1 cursor-pointer"
             id="dash-activity-all-btn"
           >
             Histórico completo <ChevronRight className="w-3 h-3" />
           </button>
         </div>
 
-        {/* Flow list */}
-        <div className="space-y-2.5" id="dash-activity-list">
-          {transactions.slice(0, 5).map((tx, idx) => (
-            <div
-              key={`dash-tx-${tx.id}-${idx}`}
-              className="flex items-center justify-between p-3.5 bg-brand-secondary rounded-xl border border-brand-tertiary/40 shadow-sm"
-              id={`dash-activity-item-${tx.id}`}
-            >
-              <div className="flex items-center gap-3 min-w-0" id={`dash-activity-left-${tx.id}`}>
-                <div
-                  className={`p-2 rounded-lg ${
-                    tx.type === 'entrada'
-                      ? 'bg-brand-green/10 text-brand-green'
-                      : 'bg-brand-red/10 text-brand-red'
-                  } border border-transparent`}
-                  id={`dash-activity-badge-${tx.id}`}
-                >
-                  {tx.type === 'entrada' ? (
-                    <ArrowUpRight className="w-4 h-4" />
+        {/* Visual Product Activity Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" id="dash-activity-list">
+          {transactions.slice(0, 6).map((tx, idx) => {
+            const product = getProductForTx(tx);
+            const isEntrada = tx.type === 'entrada';
+
+            return (
+              <div
+                key={`dash-tx-${tx.id}-${idx}`}
+                className="flex items-center gap-3 p-3.5 bg-brand-secondary rounded-2xl border border-brand-tertiary/40 shadow-sm hover:border-brand-primary/20 transition"
+                id={`dash-activity-item-${tx.id}`}
+              >
+                {/* Product Thumbnail Box */}
+                <div className="relative w-14 h-14 rounded-xl bg-brand-bg border border-brand-tertiary/60 overflow-hidden shrink-0 flex items-center justify-center" id={`dash-activity-img-box-${tx.id}`}>
+                  {product?.imageUrl ? (
+                    <img
+                      src={product.imageUrl}
+                      alt={tx.productName}
+                      className="w-full h-full object-cover"
+                      referrerPolicy="no-referrer"
+                    />
                   ) : (
-                    <ArrowDownLeft className="w-4 h-4" />
+                    <Package className="w-6 h-6 text-brand-tertiary" />
                   )}
+
+                  {/* Badge Overlay */}
+                  <div
+                    className={`absolute bottom-0 inset-x-0 text-[8px] font-bold uppercase text-center py-0.5 ${
+                      isEntrada ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white'
+                    }`}
+                  >
+                    {isEntrada ? 'Entrada' : 'Venda'}
+                  </div>
                 </div>
 
-                <div className="min-w-0" id={`dash-activity-text-${tx.id}`}>
-                  <h4 className="text-xs font-semibold text-brand-neutral truncate leading-tight" id={`dash-activity-pname-${tx.id}`}>
-                    {tx.type === 'entrada' ? 'Entrada:' : 'Venda:'} {tx.productName}
+                {/* Info Text */}
+                <div className="min-w-0 flex-1 space-y-0.5" id={`dash-activity-text-${tx.id}`}>
+                  <h4 className="text-xs font-bold text-brand-neutral truncate leading-tight" id={`dash-activity-pname-${tx.id}`}>
+                    {tx.productName}
                   </h4>
-                  <p className="text-[10px] text-gray-500 mt-0.5" id={`dash-activity-meta-${tx.id}`}>
-                    SKU: {tx.sku} • {tx.category} • {tx.time}
+                  <p className="text-[10px] text-gray-400 font-mono" id={`dash-activity-sku-${tx.id}`}>
+                    SKU: {tx.sku}
                   </p>
+                  <div className="flex items-center gap-2 pt-0.5 text-[10px] text-gray-500">
+                    <span>{tx.category}</span>
+                    <span>•</span>
+                    <span>{tx.time}</span>
+                  </div>
+                </div>
+
+                {/* Quantity Badge */}
+                <div className="text-right shrink-0 font-mono" id={`dash-activity-qty-box-${tx.id}`}>
+                  <span
+                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold ${
+                      isEntrada
+                        ? 'bg-emerald-950/40 text-emerald-400 border border-emerald-500/30'
+                        : 'bg-rose-950/40 text-rose-400 border border-rose-500/30'
+                    }`}
+                  >
+                    {isEntrada ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownLeft className="w-3 h-3" />}
+                    {isEntrada ? '+' : '-'}{tx.quantity} un
+                  </span>
                 </div>
               </div>
-
-              <div className="text-right shrink-0 font-mono text-xs font-bold" id={`dash-activity-right-${tx.id}`}>
-                <span
-                  className={tx.type === 'entrada' ? 'text-brand-green' : 'text-brand-red'}
-                  id={`dash-activity-qty-${tx.id}`}
-                >
-                  {tx.type === 'entrada' ? '+' : '-'}{tx.quantity} un
-                </span>
-                <span className="block text-[9px] text-gray-500 font-normal mt-0.5" id={`dash-activity-price-${tx.id}`}>
-                  {formatCurrency(tx.price).replace(',00', '')} / un
-                </span>
-              </div>
-            </div>
-          ))}
+            );
+          })}
 
           {transactions.length === 0 && (
-            <div className="text-center py-8 text-gray-500 bg-brand-secondary/30 rounded-xl border border-dashed border-brand-tertiary/50" id="dash-activity-empty">
+            <div className="col-span-full text-center py-8 text-gray-500 bg-brand-secondary/30 rounded-xl border border-dashed border-brand-tertiary/50" id="dash-activity-empty">
               <Package className="w-8 h-8 text-brand-tertiary mx-auto mb-2" id="dash-activity-empty-icon" />
-              <p className="text-xs font-medium" id="dash-activity-empty-text">Nenhuma movimentação registrada.</p>
-              <p className="text-[10px] text-gray-500 mt-0.5" id="dash-activity-empty-hint">Use o botão + para realizar entradas e saídas.</p>
+              <p className="text-xs font-medium" id="dash-activity-empty-text">Nenhuma movimentação registrada ainda.</p>
+              <p className="text-[10px] text-gray-500 mt-0.5" id="dash-activity-empty-hint">Use o botão + para realizar entradas e saídas de estoque.</p>
             </div>
           )}
         </div>
       </div>
 
-      {/* Floating Action Button (FAB) exactly as in mockup */}
+      {/* Floating Action Button (FAB) */}
       <div className="fixed bottom-20 right-4 z-30" id="dash-fab-wrapper">
         <motion.button
           whileHover={{ scale: 1.05 }}
