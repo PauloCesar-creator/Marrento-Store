@@ -144,17 +144,66 @@ export default function App() {
     );
   };
 
-  // Run on first load to force a clean manual setup slate for the user
+  // Run on first load to seed sample Rolex/Ultra9 item with variations if slate is empty
   useEffect(() => {
-    if (!localStorage.getItem('marento_manual_v4_clean')) {
-      localStorage.removeItem('marento_products');
-      localStorage.removeItem('marento_transactions');
-      localStorage.removeItem('marento_categories');
-      setProducts([]);
-      setTransactions([]);
-      setCategories([]);
-      setSelectedCategory('Todos');
-      localStorage.setItem('marento_manual_v4_clean', 'true');
+    if (!localStorage.getItem('marento_smartpanel_sample_v1')) {
+      const sampleVariants = [
+        {
+          id: 'var-ouro',
+          name: 'Botão de Ouro',
+          quantity: 10,
+          imageUrl: 'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?auto=format&fit=crop&w=600&q=80',
+          sku: 'SK-888-OURO'
+        },
+        {
+          id: 'var-preto',
+          name: 'Preto-Ultra9',
+          quantity: 8,
+          imageUrl: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=600&q=80',
+          sku: 'SK-888-PRET'
+        },
+        {
+          id: 'var-rosa',
+          name: 'Rosa-Ultra9',
+          quantity: 5,
+          imageUrl: 'https://images.unsplash.com/photo-1508685096489-7aacd43bd3b1?auto=format&fit=crop&w=600&q=80',
+          sku: 'SK-888-ROSA'
+        },
+        {
+          id: 'var-cinza',
+          name: 'Cinza-Ultra9',
+          quantity: 7,
+          imageUrl: 'https://images.unsplash.com/photo-1533139502658-0198f920d8e8?auto=format&fit=crop&w=600&q=80',
+          sku: 'SK-888-CINZ'
+        },
+        {
+          id: 'var-azul',
+          name: 'Azul-Ultra9',
+          quantity: 5,
+          imageUrl: 'https://images.unsplash.com/photo-1524805444758-089113d48a6d?auto=format&fit=crop&w=600&q=80',
+          sku: 'SK-888-AZUL'
+        }
+      ];
+
+      const sampleProduct: Product = {
+        id: 'prod-rolex-smart',
+        name: 'Relógio Ultra9 Esporte Silicone (Rolex)',
+        sku: 'SK-888-RLX',
+        category: 'Relógios',
+        price: 50.00,
+        quantity: 35, // Sum of 10 + 8 + 5 + 7 + 5
+        minStock: 5,
+        imageUrl: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=600&q=80',
+        supplier: 'Geneva Watches S/A',
+        description: 'Relógio esportivo com variações de cores e pulseiras do mesmo valor. Selecione as variações no Painel Inteligente.',
+        salesCount: 15,
+        createdAt: new Date().toISOString(),
+        variants: sampleVariants
+      };
+
+      setProducts((prev) => (prev.length === 0 ? [sampleProduct] : prev));
+      setCategories((prev) => (prev.length === 0 ? ['Relógios', 'Acessórios'] : prev));
+      localStorage.setItem('marento_smartpanel_sample_v1', 'true');
     }
   }, []);
 

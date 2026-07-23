@@ -6,19 +6,28 @@ export interface Category {
   createdAt: string;
 }
 
+export interface ProductVariant {
+  id: string;
+  name: string; // e.g., "Botão de Ouro", "Preto-Ultra9", "Rosa-Ultra9"
+  quantity: number;
+  imageUrl?: string;
+  sku?: string;
+}
+
 export interface Product {
   id: string;
   name: string;
   sku: string;
   category: CategoryName;
   price: number; // Unit value
-  quantity: number;
+  quantity: number; // Total quantity (sum of variants if variants exist)
   minStock: number; // Minimum stock threshold
   imageUrl: string;
   supplier: string;
   description: string;
   salesCount: number; // Total units sold
   createdAt: string;
+  variants?: ProductVariant[]; // Smart Panel variations
 }
 
 export interface Transaction {
