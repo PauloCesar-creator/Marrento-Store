@@ -12,7 +12,8 @@ import {
   Sparkles,
   Volume2,
   RefreshCw,
-  ShoppingBag
+  ShoppingBag,
+  Receipt
 } from 'lucide-react';
 import { Product, ProductVariant } from '../types';
 import { playScanBeep } from '../utils/barcodeUtils';
@@ -25,6 +26,7 @@ interface BarcodeScannerModalProps {
   onOpenQuickOp: (productId: string, type: 'entrada' | 'saida') => void;
   onOpenSmartPanel?: (product: Product) => void;
   onOpenPrintTag?: (product: Product, variant?: ProductVariant) => void;
+  onOpenNfce?: (product: Product, variant?: ProductVariant) => void;
 }
 
 export default function BarcodeScannerModal({
@@ -34,6 +36,7 @@ export default function BarcodeScannerModal({
   onOpenQuickOp,
   onOpenSmartPanel,
   onOpenPrintTag,
+  onOpenNfce,
 }: BarcodeScannerModalProps) {
   const [scanInput, setScanInput] = useState('');
   const [matchedProduct, setMatchedProduct] = useState<Product | null>(null);
@@ -341,6 +344,18 @@ export default function BarcodeScannerModal({
 
                 {/* Quick Action buttons for matched product */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-3 border-t border-brand-tertiary/60">
+                  {onOpenNfce && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onOpenNfce(matchedProduct, matchedVariant || undefined);
+                      }}
+                      className="col-span-2 sm:col-span-1 py-2.5 px-3 rounded-xl bg-amber-500/20 hover:bg-amber-500/35 border border-amber-500/50 text-amber-300 font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer shadow-md"
+                    >
+                      <Receipt className="w-4 h-4 text-amber-400" /> Nota Fiscal
+                    </button>
+                  )}
+
                   <button
                     type="button"
                     onClick={() => {
@@ -372,19 +387,6 @@ export default function BarcodeScannerModal({
                       className="py-2.5 px-3 rounded-xl bg-brand-primary/10 hover:bg-brand-primary/25 border border-brand-primary/30 text-brand-primary font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer"
                     >
                       <Printer className="w-4 h-4" /> Etiqueta
-                    </button>
-                  )}
-
-                  {onOpenSmartPanel && matchedProduct.variants && matchedProduct.variants.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onOpenSmartPanel(matchedProduct);
-                        onClose();
-                      }}
-                      className="py-2.5 px-3 rounded-xl bg-brand-tertiary hover:bg-brand-tertiary/80 text-brand-neutral font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer"
-                    >
-                      <Sparkles className="w-4 h-4 text-brand-primary" /> Variações
                     </button>
                   )}
                 </div>

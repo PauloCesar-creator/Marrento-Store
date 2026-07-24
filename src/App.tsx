@@ -9,6 +9,7 @@ import {
   Sparkles,
   Barcode,
   Printer,
+  Receipt,
   Database,
   User,
   UserCheck,
@@ -28,6 +29,7 @@ import OperationModal from './components/OperationModal';
 import BarcodeScannerModal from './components/BarcodeScannerModal';
 import PrintTagModal from './components/PrintTagModal';
 import PrintReceiptModal from './components/PrintReceiptModal';
+import NfceModal from './components/NfceModal';
 import DatabaseStatusModal from './components/DatabaseStatusModal';
 import LoginModal from './components/LoginModal';
 import { useBarcodeScanner } from './utils/useBarcodeScanner';
@@ -113,7 +115,7 @@ export default function App() {
   const [quickOpProductId, setQuickOpProductId] = useState<string | undefined>(undefined);
   const [quickOpType, setQuickOpType] = useState<'entrada' | 'saida'>('entrada');
 
-  // 4. Barcode Scanner, Database & Printer Modals States
+  // 4. Barcode Scanner, Database, Printer & NFC-e Modals States
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [isDbStatusOpen, setIsDbStatusOpen] = useState(false);
   const [dbSyncError, setDbSyncError] = useState<string | null>(null);
@@ -122,6 +124,9 @@ export default function App() {
   const [isPrintTagOpen, setIsPrintTagOpen] = useState(false);
   const [printReceiptTx, setPrintReceiptTx] = useState<Transaction | null>(null);
   const [isPrintReceiptOpen, setIsPrintReceiptOpen] = useState(false);
+  const [isNfceOpen, setIsNfceOpen] = useState(false);
+  const [nfceProduct, setNfceProduct] = useState<Product | null>(null);
+  const [nfceVariant, setNfceVariant] = useState<ProductVariant | null>(null);
 
   // Global Plug & Play USB/Bluetooth Barcode Scanner Listener
   useBarcodeScanner({
@@ -140,6 +145,12 @@ export default function App() {
   const handleOpenPrintReceipt = (tx: Transaction) => {
     setPrintReceiptTx(tx);
     setIsPrintReceiptOpen(true);
+  };
+
+  const handleOpenNfce = (prod?: Product | null, variant?: ProductVariant | null) => {
+    setNfceProduct(prod || null);
+    setNfceVariant(variant || null);
+    setIsNfceOpen(true);
   };
 
   // Sync state to localStorage on any state modification
@@ -597,9 +608,20 @@ export default function App() {
             </div>
           </div>
 
-          {/* Header Action Buttons: Leitor, Status do Banco & Bell */}
+          {/* Header Action Buttons: Nota Fiscal, Leitor, Status do Banco & Bell */}
           <div className="flex items-center gap-2" id="header-right-actions">
             
+            {/* Emitir Nota Fiscal Button */}
+            <button
+              onClick={() => handleOpenNfce()}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-amber-500/10 border border-amber-500/60 text-amber-300 hover:bg-amber-500 hover:text-black transition shadow-md cursor-pointer font-bold text-xs"
+              title="Emitir Nota Fiscal Eletrônica (NFC-e / DANFE)"
+              id="header-nfce-btn"
+            >
+              <Receipt className="w-4 h-4 text-amber-400" />
+              <span className="hidden sm:inline">Emitir Nota Fiscal</span>
+            </button>
+
             {/* Status do Banco Button */}
             <button
               onClick={() => setIsDbStatusOpen(true)}
@@ -860,9 +882,22 @@ export default function App() {
         products={products}
         onOpenQuickOp={handleOpenQuickOp}
         onOpenPrintTag={handleOpenPrintTag}
+        onOpenNfce={handleOpenNfce}
       />
 
-      {/* 6. Thermal Barcode Label / Tag Printer Modal */}
+      {/* 6. Emitir Nota Fiscal (DANFE NFC-e / Cupom Fiscal EPSON) Modal */}
+      <NfceModal
+        isOpen={isNfceOpen}
+        onClose={() => setIsNfceOpen(false)}
+        products={products}
+        initialProduct={nfceProduct}
+        initialVariant={nfceVariant}
+        onConfirmSaleAndPrint={(productId, quantity, price) => {
+          handleRecordTransaction(productId, 'saida', quantity, price);
+        }}
+      />
+
+      {/* 7. Thermal Barcode Label / Tag Printer Modal */}
       <PrintTagModal
         isOpen={isPrintTagOpen}
         onClose={() => setIsPrintTagOpen(false)}
@@ -870,7 +905,7 @@ export default function App() {
         selectedVariant={printTagVariant}
       />
 
-      {/* 7. Thermal Receipt / Movement Voucher Printer Modal */}
+      {/* 8. Thermal Receipt / Movement Voucher Printer Modal */}
       <PrintReceiptModal
         isOpen={isPrintReceiptOpen}
         onClose={() => setIsPrintReceiptOpen(false)}

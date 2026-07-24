@@ -35,6 +35,7 @@
 @media print {
   @page {
     margin: 0;
+    size: auto;
   }
 
   html, body {
@@ -43,15 +44,23 @@
     margin: 0 !important;
     padding: 0 !important;
     width: 100% !important;
+    height: auto !important;
     font-family: 'JetBrains Mono', monospace, sans-serif !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
 
-  /* Hide screen app UI elements when printing */
+  /* Hide screen app UI elements, backdrops, modal shell controls, headers, buttons */
   #app-container,
-  #print-tag-overlay,
-  #print-receipt-overlay,
+  #app-main,
+  #print-tag-backdrop,
+  #print-receipt-backdrop,
+  #print-tag-modal,
+  #print-receipt-modal,
+  #nfce-modal-backdrop,
+  #nfce-modal-window,
+  #barcode-modal-backdrop,
+  #barcode-modal,
   #login-modal-backdrop,
   #database-status-overlay,
   header,
@@ -62,13 +71,27 @@
     display: none !important;
   }
 
-  /* Show printable areas */
-  #printable-tag-area,
-  #printable-receipt-area {
+  /* Ensure overlay containers do not hide children during print */
+  #print-tag-overlay,
+  #print-receipt-overlay,
+  #barcode-modal-overlay,
+  #nfce-modal-overlay {
     display: block !important;
-    position: relative !important;
+    position: static !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    inset: auto !important;
+  }
+
+  /* Show printable content areas with full contrast */
+  #printable-tag-area,
+  #printable-receipt-area,
+  #printable-nfce-area {
+    display: block !important;
+    position: static !important;
     width: 100% !important;
-    margin: 0 auto !important;
+    margin: 0 !important;
     padding: 2mm !important;
     background-color: #ffffff !important;
     color: #000000 !important;
