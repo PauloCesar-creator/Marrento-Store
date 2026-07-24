@@ -17,6 +17,7 @@ import {
   CheckCircle2
 } from 'lucide-react';
 import { Product, ProductVariant } from '../types';
+import { generateUUID } from '../utils/uuid';
 
 interface SmartPanelModalProps {
   product: Product;
@@ -107,7 +108,7 @@ export default function SmartPanelModal({
     }
 
     const newVariant: ProductVariant = {
-      id: `var-${Date.now()}`,
+      id: generateUUID(),
       name: trimmedName,
       quantity: newVarQty,
       imageUrl:

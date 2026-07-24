@@ -12,7 +12,8 @@ import {
   Database,
   User,
   UserCheck,
-  Lock
+  Lock,
+  AlertCircle
 } from 'lucide-react';
 
 import { Product, Transaction, Notification, CategoryName, ProductVariant } from './types';
@@ -30,6 +31,8 @@ import PrintReceiptModal from './components/PrintReceiptModal';
 import DatabaseStatusModal from './components/DatabaseStatusModal';
 import LoginModal from './components/LoginModal';
 import { useBarcodeScanner } from './utils/useBarcodeScanner';
+import { generateUUID } from './utils/uuid';
+import { supabase } from './lib/supabase';
 import {
   dbFetchCategories,
   dbAddCategory,
@@ -113,6 +116,7 @@ export default function App() {
   // 4. Barcode Scanner, Database & Printer Modals States
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [isDbStatusOpen, setIsDbStatusOpen] = useState(false);
+  const [dbSyncError, setDbSyncError] = useState<string | null>(null);
   const [printTagProduct, setPrintTagProduct] = useState<Product | null>(null);
   const [printTagVariant, setPrintTagVariant] = useState<ProductVariant | null>(null);
   const [isPrintTagOpen, setIsPrintTagOpen] = useState(false);
@@ -155,7 +159,7 @@ export default function App() {
     localStorage.setItem('marento_suppliers', JSON.stringify(suppliers));
   }, [suppliers]);
 
-  // Initial Sync from Supabase on load
+  // Initial Sync & Real-Time Sync from Supabase across devices
   useEffect(() => {
     async function loadFromSupabase() {
       try {
@@ -167,14 +171,13 @@ export default function App() {
         ]);
 
         if (remoteCats.length > 0) {
-          setCategories((prev) => Array.from(new Set([...prev, ...remoteCats])));
+          setCategories(Array.from(new Set(remoteCats)));
         }
         if (remoteSups.length > 0) {
-          setSuppliers((prev) => Array.from(new Set([...prev, ...remoteSups])));
+          setSuppliers(Array.from(new Set(remoteSups)));
         }
         if (remoteProds.length > 0) {
           setProducts((prev) => {
-            // merge or replace if remote exists
             const map = new Map<string, Product>();
             prev.forEach((p) => map.set(p.id, p));
             remoteProds.forEach((p) => map.set(p.id, p));
@@ -190,10 +193,73 @@ export default function App() {
           });
         }
       } catch (e) {
-        console.warn('Initial Supabase fetch attempt completed with warnings:', e);
+        console.warn('Supabase fetch attempt completed with warnings:', e);
       }
     }
+
     loadFromSupabase();
+
+    // Setup Supabase Realtime channel for instant cross-device updates
+    let channel: any;
+    try {
+      channel = supabase
+        .channel('marento-realtime-sync')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'categories' },
+          async () => {
+            const remoteCats = await dbFetchCategories();
+            if (remoteCats.length > 0) setCategories(Array.from(new Set(remoteCats)));
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'suppliers' },
+          async () => {
+            const remoteSups = await dbFetchSuppliers();
+            if (remoteSups.length > 0) setSuppliers(Array.from(new Set(remoteSups)));
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'products' },
+          async () => {
+            const remoteProds = await dbFetchProducts();
+            if (remoteProds.length > 0) setProducts(remoteProds);
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'product_variants' },
+          async () => {
+            const remoteProds = await dbFetchProducts();
+            if (remoteProds.length > 0) setProducts(remoteProds);
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'transactions' },
+          async () => {
+            const remoteTxs = await dbFetchTransactions();
+            if (remoteTxs.length > 0) setTransactions(remoteTxs);
+          }
+        )
+        .subscribe();
+    } catch (err) {
+      console.warn('Realtime channel setup warning:', err);
+    }
+
+    // Secondary fallback polling every 10s for seamless sync
+    const pollInterval = setInterval(() => {
+      loadFromSupabase();
+    }, 10000);
+
+    return () => {
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
+      clearInterval(pollInterval);
+    };
   }, []);
 
   // Add custom category
@@ -206,7 +272,12 @@ export default function App() {
     }
     setCategories((prev) => [...prev, cleanName]);
     // Save to Supabase
-    await dbAddCategory(cleanName);
+    const res = await dbAddCategory(cleanName);
+    if (res && !res.success && res.error) {
+      setDbSyncError(`Aviso Supabase (Categoria): ${res.error}`);
+    } else {
+      setDbSyncError(null);
+    }
   };
 
   // Delete custom category
@@ -249,7 +320,12 @@ export default function App() {
       return;
     }
     setSuppliers((prev) => [...prev, cleanName]);
-    await dbAddSupplier(cleanName);
+    const res = await dbAddSupplier(cleanName);
+    if (res && !res.success && res.error) {
+      setDbSyncError(`Aviso Supabase (Fornecedor): ${res.error}`);
+    } else {
+      setDbSyncError(null);
+    }
   };
 
   // Delete supplier
@@ -387,14 +463,19 @@ export default function App() {
   const handleAddProduct = async (newProd: Omit<Product, 'id' | 'salesCount' | 'createdAt'>) => {
     const product: Product = {
       ...newProd,
-      id: `prod-${Date.now()}`,
+      id: generateUUID(),
       salesCount: 0,
       createdAt: new Date().toISOString(),
     };
     setProducts((prev) => [product, ...prev]);
 
     // Save product to Supabase
-    await dbSaveProduct(product);
+    const res = await dbSaveProduct(product);
+    if (res && !res.success && res.error) {
+      setDbSyncError(`Aviso Supabase ao salvar produto "${product.name}": ${res.error}`);
+    } else {
+      setDbSyncError(null);
+    }
 
     // Push automatic creation transaction
     if (newProd.quantity > 0) {
@@ -407,7 +488,12 @@ export default function App() {
     setProducts((prev) =>
       prev.map((p) => (p.id === updatedProd.id ? updatedProd : p))
     );
-    await dbSaveProduct(updatedProd);
+    const res = await dbSaveProduct(updatedProd);
+    if (res && !res.success && res.error) {
+      setDbSyncError(`Aviso Supabase ao editar produto: ${res.error}`);
+    } else {
+      setDbSyncError(null);
+    }
   };
 
   // Delete product
@@ -448,11 +534,11 @@ export default function App() {
     );
 
     // Sync updated stock to Supabase
-    await dbSaveProduct(updatedProduct);
+    const prodRes = await dbSaveProduct(updatedProduct);
 
     // Push entry to transactions history
     const tx: Transaction = {
-      id: `tx-${Date.now()}`,
+      id: generateUUID(),
       productId,
       productName: prod.name,
       sku: prod.sku,
@@ -468,7 +554,14 @@ export default function App() {
     setTransactions((prev) => [tx, ...prev]);
 
     // Save transaction to Supabase
-    await dbSaveTransaction(tx);
+    const txRes = await dbSaveTransaction(tx);
+
+    if ((prodRes && !prodRes.success && prodRes.error) || (txRes && !txRes.success && txRes.error)) {
+      const err = prodRes?.error || txRes?.error;
+      setDbSyncError(`Aviso Supabase ao registrar movimentação: ${err}`);
+    } else {
+      setDbSyncError(null);
+    }
   };
 
   // Open transaction wizard modal
@@ -583,6 +676,30 @@ export default function App() {
 
         </div>
       </header>
+
+      {/* DB Sync Warning Banner if write operation has issue */}
+      {dbSyncError && (
+        <div className="bg-amber-950/90 border-b border-amber-500/50 text-amber-200 px-4 py-2.5 text-xs flex items-center justify-between shadow-xl z-30 animate-fade-in" id="db-sync-error-banner">
+          <div className="flex items-center gap-2 max-w-2xl">
+            <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+            <span className="font-medium">{dbSyncError}</span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => setIsDbStatusOpen(true)}
+              className="px-2.5 py-1 bg-amber-500 text-black font-bold text-[10px] uppercase tracking-wider rounded-lg hover:bg-amber-400 transition cursor-pointer"
+            >
+              Resolver
+            </button>
+            <button
+              onClick={() => setDbSyncError(null)}
+              className="text-amber-400 hover:text-amber-200 text-xs px-1 font-bold cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 2. Main Content Container (Bounded width, elegant layout margins) */}
       <main className="flex-1 max-w-4xl w-full mx-auto px-4 sm:px-6 pt-6" id="app-main">
