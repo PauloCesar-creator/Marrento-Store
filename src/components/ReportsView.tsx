@@ -96,8 +96,20 @@ export default function ReportsView({ products, transactions }: ReportsViewProps
   const qtdSaidasPeriodo = periodSalesTxs.reduce((acc, t) => acc + t.quantity, 0);
   const qtdEntradasPeriodo = periodEntriesTxs.reduce((acc, t) => acc + t.quantity, 0);
 
-  // Estimated Gross Margin / Profit (35% estimated average profit margin)
-  const lucroEstimadoPeriodo = faturamentoPeriodo * 0.35;
+  // Total Invested Value in Store Inventory (Sum of cost x quantity across all products)
+  const valorTotalInvestido = products.reduce((acc, p) => {
+    const unitCost = p.costPrice && p.costPrice > 0 ? p.costPrice : p.price;
+    return acc + unitCost * p.quantity;
+  }, 0);
+
+  // Estimated Gross Profit (Uses real costPrice when available, falls back to estimated 35% margin)
+  const lucroEstimadoPeriodo = periodSalesTxs.reduce((acc, t) => {
+    const product = products.find((p) => p.id === t.productId || p.sku === t.sku);
+    const cost = product?.costPrice && product.costPrice > 0 ? product.costPrice : t.price * 0.65;
+    const profitPerUnit = Math.max(0, t.price - cost);
+    return acc + profitPerUnit * t.quantity;
+  }, 0);
+
   const ticketMedio = periodSalesTxs.length > 0 ? faturamentoPeriodo / periodSalesTxs.length : 0;
 
   // Stock Balance (Positivo / Negativo no Estoque)
@@ -191,7 +203,7 @@ DESEMPENHO FINANCEIRO:
 - Valor Vendido Hoje: ${formatCurrency(valorVendidoHoje)} (${qtdVendidaHoje} peças)
 - Faturamento Total (${activeRange}): ${formatCurrency(faturamentoPeriodo)}
 - Lucro Bruto Estimado (${activeRange}): ${formatCurrency(lucroEstimadoPeriodo)}
-- Ticket Médio por Venda: ${formatCurrency(ticketMedio)}
+- Valor Total Investido no Estoque: ${formatCurrency(valorTotalInvestido)}
 
 MOVIMENTAÇÃO DE ESTOQUE (${activeRange}):
 - Entradas no Estoque: +${qtdEntradasPeriodo} unidades
@@ -367,8 +379,8 @@ Fim do Relatório - Marento Store Luxury Control
 
       </div>
 
-      {/* Financial Overview Cards Row: Faturamento + Lucro Estimado + Ticket Médio */}
-      <div className="grid grid-cols-3 gap-3" id="reports-financial-cards">
+      {/* Financial Overview Cards Row: Faturamento + Lucro Estimado + Valor Total Investido */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3" id="reports-financial-cards">
         <div className="rounded-2xl bg-brand-secondary p-3.5 border border-brand-tertiary/60" id="reports-card-fat">
           <span className="block text-[9px] font-bold uppercase text-gray-400 tracking-wider mb-1">
             Faturamento ({activeRange})
@@ -387,12 +399,13 @@ Fim do Relatório - Marento Store Luxury Control
           </span>
         </div>
 
-        <div className="rounded-2xl bg-brand-secondary p-3.5 border border-brand-tertiary/60" id="reports-card-ticket">
-          <span className="block text-[9px] font-bold uppercase text-gray-400 tracking-wider mb-1">
-            Ticket Médio
+        <div className="rounded-2xl bg-brand-secondary p-3.5 border border-amber-500/30 bg-amber-950/10" id="reports-card-investido">
+          <span className="block text-[9px] font-bold uppercase text-amber-400 tracking-wider mb-1 flex items-center justify-between">
+            <span>Valor Total Investido</span>
+            <span className="text-[8px] font-normal text-amber-500/70 lowercase">estoque</span>
           </span>
-          <span className="font-serif font-bold text-lg sm:text-xl text-brand-neutral block">
-            {formatCurrency(ticketMedio)}
+          <span className="font-serif font-bold text-lg sm:text-xl text-amber-300 block" id="reports-val-investido">
+            {formatCurrency(valorTotalInvestido)}
           </span>
         </div>
       </div>

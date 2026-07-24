@@ -88,6 +88,7 @@ export default function InventoryView({
   const [sku, setSku] = useState('');
   const [category, setCategory] = useState<CategoryName>('');
   const [price, setPrice] = useState(0);
+  const [costPrice, setCostPrice] = useState(0);
   const [quantity, setQuantity] = useState(0);
   const [minStock, setMinStock] = useState(5);
   const [supplier, setSupplier] = useState('');
@@ -102,6 +103,7 @@ export default function InventoryView({
     setCategory(defaultCat);
     setSku(`SK-${Math.floor(100 + Math.random() * 900)}-${defaultCat ? defaultCat.slice(0,2).toUpperCase() : 'XX'}`);
     setPrice(0);
+    setCostPrice(0);
     setQuantity(0);
     setMinStock(5);
     setSupplier(suppliers[0] || '');
@@ -118,6 +120,7 @@ export default function InventoryView({
     setSku(prod.sku);
     setCategory(prod.category);
     setPrice(prod.price);
+    setCostPrice(prod.costPrice || 0);
     setQuantity(prod.quantity);
     setMinStock(prod.minStock);
     setSupplier(prod.supplier);
@@ -135,10 +138,13 @@ export default function InventoryView({
       return;
     }
 
-    if (price <= 0) {
-      setError('O preço unitário deve ser maior que zero.');
+    if (price <= 0 && costPrice <= 0) {
+      setError('O valor gasto ou o preço de venda deve ser maior que zero.');
       return;
     }
+
+    const finalPrice = price > 0 ? price : costPrice;
+    const finalCost = costPrice > 0 ? costPrice : price;
 
     // Default premium luxury image if empty
     const finalImageUrl = imageUrl.trim() || 'https://images.unsplash.com/photo-1614162692292-7ac56d7f7f1e?auto=format&fit=crop&w=600&q=80';
@@ -150,7 +156,8 @@ export default function InventoryView({
         name,
         sku,
         category,
-        price,
+        price: finalPrice,
+        costPrice: finalCost,
         quantity,
         minStock,
         supplier,
@@ -164,7 +171,8 @@ export default function InventoryView({
         name,
         sku,
         category,
-        price,
+        price: finalPrice,
+        costPrice: finalCost,
         quantity,
         minStock,
         supplier,
@@ -722,19 +730,36 @@ export default function InventoryView({
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-3" id="inv-modal-form-numeric">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5" id="inv-modal-form-numeric">
+                    <div>
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-amber-400 mb-1" id="inv-modal-lbl-cost">
+                        Valor Gasto (R$)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={costPrice === 0 ? '' : costPrice}
+                        onChange={(e) => setCostPrice(parseFloat(e.target.value) || 0)}
+                        placeholder="0.00"
+                        className="w-full bg-brand-bg border border-amber-500/40 rounded-xl px-2.5 py-2 text-xs text-brand-neutral focus:outline-none focus:border-amber-400 text-center"
+                        id="inv-modal-input-cost"
+                      />
+                    </div>
+
                     <div>
                       <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-primary mb-1" id="inv-modal-lbl-price">
-                        Preço Unitário (R$) *
+                        Preço Venda (R$) *
                       </label>
                       <input
                         type="number"
                         step="0.01"
                         min="0"
                         required
-                        value={price}
+                        value={price === 0 ? '' : price}
                         onChange={(e) => setPrice(parseFloat(e.target.value) || 0)}
-                        className="w-full bg-brand-bg border border-brand-tertiary rounded-xl px-3 py-2 text-xs text-brand-neutral focus:outline-none focus:border-brand-primary text-center"
+                        placeholder="0.00"
+                        className="w-full bg-brand-bg border border-brand-tertiary rounded-xl px-2.5 py-2 text-xs text-brand-neutral focus:outline-none focus:border-brand-primary text-center"
                         id="inv-modal-input-price"
                       />
                     </div>
@@ -749,14 +774,14 @@ export default function InventoryView({
                         disabled={!!editingProd} // Stock additions should go through regular Entries
                         value={quantity}
                         onChange={(e) => setQuantity(parseInt(e.target.value) || 0)}
-                        className={`w-full bg-brand-bg border border-brand-tertiary rounded-xl px-3 py-2 text-xs text-brand-neutral focus:outline-none focus:border-brand-primary text-center ${editingProd ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        className={`w-full bg-brand-bg border border-brand-tertiary rounded-xl px-2.5 py-2 text-xs text-brand-neutral focus:outline-none focus:border-brand-primary text-center ${editingProd ? 'opacity-50 cursor-not-allowed' : ''}`}
                         id="inv-modal-input-qty"
                       />
                     </div>
 
                     <div>
                       <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-primary mb-1" id="inv-modal-lbl-min">
-                        Alerta Estoque Mín *
+                        Estoque Mín *
                       </label>
                       <input
                         type="number"
@@ -764,7 +789,7 @@ export default function InventoryView({
                         required
                         value={minStock}
                         onChange={(e) => setMinStock(parseInt(e.target.value) || 0)}
-                        className="w-full bg-brand-bg border border-brand-tertiary rounded-xl px-3 py-2 text-xs text-brand-neutral focus:outline-none focus:border-brand-primary text-center"
+                        className="w-full bg-brand-bg border border-brand-tertiary rounded-xl px-2.5 py-2 text-xs text-brand-neutral focus:outline-none focus:border-brand-primary text-center"
                         id="inv-modal-input-min"
                       />
                     </div>

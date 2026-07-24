@@ -19,7 +19,8 @@ export interface Product {
   name: string;
   sku: string;
   category: CategoryName;
-  price: number; // Unit value
+  price: number; // Unit selling value
+  costPrice?: number; // Valor gasto / Custo de aquisição
   quantity: number; // Total quantity (sum of variants if variants exist)
   minStock: number; // Minimum stock threshold
   imageUrl: string;

@@ -33,6 +33,7 @@ export default function EntryFormView({
   const [category, setCategory] = useState<CategoryName>(categories[0] || '');
   const [quantity, setQuantity] = useState<number>(0);
   const [name, setName] = useState('');
+  const [costPrice, setCostPrice] = useState<number>(0);
   const [price, setPrice] = useState<number>(0);
   const [imageUrl, setImageUrl] = useState('');
   const [error, setError] = useState('');
@@ -101,10 +102,13 @@ export default function EntryFormView({
       setError('Insira o nome do item.');
       return;
     }
-    if (price <= 0) {
-      setError('O valor unitário deve ser maior que zero.');
+    if (costPrice <= 0 && price <= 0) {
+      setError('Informe o valor gasto (custo) ou o preço de venda do item.');
       return;
     }
+
+    const finalPrice = price > 0 ? price : costPrice;
+    const finalCost = costPrice > 0 ? costPrice : price;
 
     setError('');
 
@@ -117,7 +121,7 @@ export default function EntryFormView({
 
     if (existingProduct) {
       // Record transaction on existing product
-      onRecordTransaction(existingProduct.id, 'entrada', quantity, price);
+      onRecordTransaction(existingProduct.id, 'entrada', quantity, finalPrice);
       targetProductId = existingProduct.id;
     } else {
       // Auto-generate SKU
@@ -130,7 +134,8 @@ export default function EntryFormView({
         name: name.trim(),
         sku: randomSku,
         category,
-        price,
+        price: finalPrice,
+        costPrice: finalCost,
         quantity, // will start with this quantity
         minStock: 5, // default
         supplier,
@@ -144,6 +149,7 @@ export default function EntryFormView({
     // Clear form
     setQuantity(0);
     setName('');
+    setCostPrice(0);
     setPrice(0);
     setImageUrl('');
 
@@ -424,23 +430,46 @@ export default function EntryFormView({
               />
             </div>
 
-            {/* Form row 4: Cost Price */}
-            <div id="entry-form-price-group">
-              <label className="block text-[11px] uppercase tracking-wider font-bold text-brand-primary mb-1.5" id="entry-form-lbl-price">
-                Valor Unitário (Custo)
-              </label>
-              <div className="relative" id="entry-form-price-input-wrapper">
-                <span className="absolute left-3.5 top-2 text-xs text-gray-500 font-medium" id="entry-form-currency-prefix">R$</span>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={price === 0 ? '' : price}
-                  onChange={(e) => setPrice(parseFloat(e.target.value) || 0)}
-                  placeholder="0,00"
-                  className="w-full bg-brand-bg border border-brand-tertiary rounded-xl pl-9 pr-3 py-2 text-xs text-brand-neutral focus:outline-none focus:border-brand-primary"
-                  id="entry-form-input-price"
-                />
+            {/* Form row 4: Cost Price & Selling Price */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4" id="entry-form-prices-row">
+              <div id="entry-form-cost-group">
+                <label className="block text-[11px] uppercase tracking-wider font-bold text-amber-400 mb-1.5" id="entry-form-lbl-cost">
+                  Valor Gasto (Custo) *
+                </label>
+                <div className="relative" id="entry-form-cost-input-wrapper">
+                  <span className="absolute left-3.5 top-2.5 text-xs text-amber-500/80 font-medium" id="entry-form-cost-currency-prefix">R$</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={costPrice === 0 ? '' : costPrice}
+                    onChange={(e) => setCostPrice(parseFloat(e.target.value) || 0)}
+                    placeholder="0,00"
+                    className="w-full bg-brand-bg border border-amber-500/30 rounded-xl pl-9 pr-3 py-2 text-xs text-brand-neutral focus:outline-none focus:border-amber-400"
+                    id="entry-form-input-cost"
+                  />
+                </div>
+                <span className="text-[10px] text-gray-500 block mt-1">Quanto você investiu neste item</span>
+              </div>
+
+              <div id="entry-form-price-group">
+                <label className="block text-[11px] uppercase tracking-wider font-bold text-brand-primary mb-1.5" id="entry-form-lbl-price">
+                  Preço de Venda *
+                </label>
+                <div className="relative" id="entry-form-price-input-wrapper">
+                  <span className="absolute left-3.5 top-2.5 text-xs text-gray-500 font-medium" id="entry-form-currency-prefix">R$</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={price === 0 ? '' : price}
+                    onChange={(e) => setPrice(parseFloat(e.target.value) || 0)}
+                    placeholder="0,00"
+                    className="w-full bg-brand-bg border border-brand-tertiary rounded-xl pl-9 pr-3 py-2 text-xs text-brand-neutral focus:outline-none focus:border-brand-primary"
+                    id="entry-form-input-price"
+                  />
+                </div>
+                <span className="text-[10px] text-gray-500 block mt-1">Valor cobrado do cliente</span>
               </div>
             </div>
 
