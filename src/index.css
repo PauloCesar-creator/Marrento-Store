@@ -50,9 +50,23 @@
     print-color-adjust: exact !important;
   }
 
+  /* Root container remains in tree so child modal print areas render correctly */
+  #app-container {
+    display: block !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    position: static !important;
+    height: auto !important;
+    min-height: auto !important;
+  }
+
   /* Hide screen app UI elements, backdrops, modal shell controls, headers, buttons */
-  #app-container,
+  #app-header,
   #app-main,
+  #app-footer,
+  #db-sync-error-banner,
   #print-tag-backdrop,
   #print-receipt-backdrop,
   #print-tag-modal,
@@ -62,7 +76,9 @@
   #barcode-modal-backdrop,
   #barcode-modal,
   #login-modal-backdrop,
+  #login-modal-window,
   #database-status-overlay,
+  #database-status-modal,
   header,
   footer,
   nav,
@@ -71,7 +87,7 @@
     display: none !important;
   }
 
-  /* Ensure overlay containers do not hide children during print */
+  /* Ensure modal overlays don't clip printable contents */
   #print-tag-overlay,
   #print-receipt-overlay,
   #barcode-modal-overlay,
@@ -82,23 +98,31 @@
     padding: 0 !important;
     margin: 0 !important;
     inset: auto !important;
+    overflow: visible !important;
+    height: auto !important;
+    width: auto !important;
   }
 
-  /* Show printable content areas with full contrast */
+  /* Show printable content areas with full contrast and exact dimensions */
   #printable-tag-area,
   #printable-receipt-area,
   #printable-nfce-area {
     display: block !important;
-    position: static !important;
+    position: relative !important;
     width: 100% !important;
+    height: auto !important;
     margin: 0 !important;
     padding: 2mm !important;
     background-color: #ffffff !important;
     color: #000000 !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    z-index: 99999 !important;
   }
 
   .page-break-inside-avoid {
     page-break-inside: avoid;
+    break-inside: avoid;
   }
 }
 

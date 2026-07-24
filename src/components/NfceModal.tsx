@@ -222,11 +222,11 @@ export default function NfceModal({
                   {/* Product Selector Dropdown list */}
                   <div className="max-h-40 overflow-y-auto space-y-1.5 pr-1">
                     {filteredProducts.length > 0 ? (
-                      filteredProducts.map((p) => {
+                      filteredProducts.map((p, pIdx) => {
                         const isSelected = selectedProduct?.id === p.id;
                         return (
                           <div
-                            key={`nfce-prod-select-${p.id}`}
+                            key={`nfce-prod-select-${p.id || pIdx}-${pIdx}`}
                             onClick={() => {
                               setSelectedProduct(p);
                               setSelectedVariant(null);
@@ -285,9 +285,9 @@ export default function NfceModal({
                         >
                           Padrão ({selectedProduct.name})
                         </button>
-                        {selectedProduct.variants.map((v) => (
+                        {selectedProduct.variants.map((v, vIdx) => (
                           <button
-                            key={`nfce-var-${v.id}`}
+                            key={`nfce-var-${v.id || vIdx}-${vIdx}`}
                             type="button"
                             onClick={() => setSelectedVariant(v)}
                             className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition cursor-pointer ${
