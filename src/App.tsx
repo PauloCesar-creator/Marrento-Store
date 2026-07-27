@@ -32,6 +32,7 @@ import PrintReceiptModal from './components/PrintReceiptModal';
 import NfceModal from './components/NfceModal';
 import DatabaseStatusModal from './components/DatabaseStatusModal';
 import LoginModal from './components/LoginModal';
+import marrentoLogo from '../assets/img/marrento store logo.jpg';
 import { useBarcodeScanner } from './utils/useBarcodeScanner';
 import { generateUUID } from './utils/uuid';
 import { supabase } from './lib/supabase';
@@ -751,9 +752,13 @@ export default function App() {
           
           {/* Logo brand */}
           <div className="flex items-center gap-3 cursor-pointer" onClick={() => setActiveTab('Dashboard')} id="brand-logo-group">
-            <div className="w-10 h-10 rounded-full border border-brand-primary flex items-center justify-center bg-brand-secondary/90 shadow-lg" id="brand-logo-circle">
-              {/* Lion or crown placeholder using stars */}
-              <Sparkles className="w-5 h-5 text-brand-primary animate-pulse" id="brand-logo-sparkle" />
+            <div className="w-10 h-10 rounded-full border border-brand-primary flex items-center justify-center bg-brand-secondary/90 shadow-lg overflow-hidden shrink-0" id="brand-logo-circle">
+              <img
+                src={marrentoLogo}
+                alt="Marrento Store Logo"
+                className="w-full h-full object-cover"
+                id="brand-logo-img"
+              />
             </div>
             <div id="brand-labels">
               <h1 className="font-serif font-black text-lg tracking-wide text-brand-primary leading-tight" id="brand-title">
@@ -779,10 +784,10 @@ export default function App() {
               <span className="hidden sm:inline">Emitir Nota Fiscal</span>
             </button>
 
-            {/* Status do Banco Button */}
+            {/* Status do Banco Button (Oculto em mobile para evitar estouro de layout) */}
             <button
               onClick={() => setIsDbStatusOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-brand-secondary border border-emerald-500/50 text-emerald-400 hover:bg-emerald-500 hover:text-black transition shadow-md cursor-pointer font-bold text-xs"
+              className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-full bg-brand-secondary border border-emerald-500/50 text-emerald-400 hover:bg-emerald-500 hover:text-black transition shadow-md cursor-pointer font-bold text-xs shrink-0"
               title="Verificar Conexão com o Banco Supabase"
               id="header-db-status-btn"
             >

@@ -327,7 +327,7 @@ export default function EntryFormView({
             </div>
 
             {/* Form row 2: Category & Quantity */}
-            <div className="grid grid-cols-2 gap-4" id="entry-form-cat-qty-row">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4" id="entry-form-cat-qty-row">
               <div id="entry-form-cat-group">
                 <label className="block text-[11px] uppercase tracking-wider font-bold text-brand-primary mb-1.5" id="entry-form-lbl-cat">
                   Categoria
