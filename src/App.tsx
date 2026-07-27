@@ -46,7 +46,9 @@ import {
   dbSaveProduct,
   dbDeleteProduct,
   dbFetchTransactions,
-  dbSaveTransaction
+  dbSaveTransaction,
+  dbClearTransactions,
+  dbResetProductsSalesCount
 } from './lib/dbService';
 
 export default function App() {
@@ -294,7 +296,7 @@ export default function App() {
   }, [closingDay, transactions, monthlyClosings]);
 
   // Handler for Resetting Monthly / Period Data
-  const handleResetPeriodData = (saveClosingBeforeReset: boolean) => {
+  const handleResetPeriodData = async (saveClosingBeforeReset: boolean) => {
     if (saveClosingBeforeReset) {
       const snapshot = createClosingSnapshot(true);
       if (snapshot) {
@@ -302,19 +304,23 @@ export default function App() {
       }
     }
 
-    // 1. Clear transactions history
+    // 1. Clear transactions history locally
     setTransactions([]);
     localStorage.setItem('marento_transactions', '[]');
 
-    // 2. Reset product sales counts
+    // 2. Clear transactions history from Supabase DB so it doesn't reload on sync
+    await dbClearTransactions();
+
+    // 3. Reset product sales counts locally and in Supabase DB
     setProducts((prev) =>
       prev.map((p) => ({
         ...p,
         salesCount: 0,
       }))
     );
+    await dbResetProductsSalesCount();
 
-    // 3. Clear temporary notifications
+    // 4. Clear temporary notifications
     setNotifications([]);
   };
 
@@ -351,14 +357,9 @@ export default function App() {
             return Array.from(map.values());
           });
         }
-        if (remoteTxs.length > 0) {
-          setTransactions((prev) => {
-            const map = new Map<string, Transaction>();
-            prev.forEach((t) => map.set(t.id, t));
-            remoteTxs.forEach((t) => map.set(t.id, t));
-            return Array.from(map.values());
-          });
-        }
+        
+        // Sync transactions with database (resets reflect immediately if database was cleared)
+        setTransactions(remoteTxs);
       } catch (e) {
         console.warn('Supabase fetch attempt completed with warnings:', e);
       }
@@ -408,7 +409,7 @@ export default function App() {
           { event: '*', schema: 'public', table: 'transactions' },
           async () => {
             const remoteTxs = await dbFetchTransactions();
-            if (remoteTxs.length > 0) setTransactions(remoteTxs);
+            setTransactions(remoteTxs);
           }
         )
         .subscribe();

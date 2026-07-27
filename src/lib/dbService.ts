@@ -423,3 +423,40 @@ export async function dbSaveTransaction(tx: Transaction): Promise<{ success: boo
   }
 }
 
+export async function dbClearTransactions(): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from('transactions')
+      .delete()
+      .gte('created_at', '1970-01-01T00:00:00Z');
+
+    if (error) {
+      console.warn('Could not clear transactions from Supabase:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('Error clearing transactions in Supabase:', err);
+    return false;
+  }
+}
+
+export async function dbResetProductsSalesCount(): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from('products')
+      .update({ sales_count: 0 })
+      .gte('created_at', '1970-01-01T00:00:00Z');
+
+    if (error) {
+      console.warn('Could not reset sales_count in Supabase:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('Error resetting sales_count in Supabase:', err);
+    return false;
+  }
+}
+
+
