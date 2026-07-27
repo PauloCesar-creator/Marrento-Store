@@ -17,7 +17,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 
-import { Product, Transaction, Notification, CategoryName, ProductVariant } from './types';
+import { Product, Transaction, Notification, CategoryName, ProductVariant, MonthlyClosing } from './types';
 import { INITIAL_PRODUCTS, INITIAL_TRANSACTIONS, SUPPLIERS } from './data';
 
 import DashboardView from './components/DashboardView';
@@ -128,6 +128,17 @@ export default function App() {
   const [nfceProduct, setNfceProduct] = useState<Product | null>(null);
   const [nfceVariant, setNfceVariant] = useState<ProductVariant | null>(null);
 
+  // 5. Monthly Closing & System Settings States
+  const [closingDay, setClosingDay] = useState<number>(() => {
+    const saved = localStorage.getItem('marento_closing_day');
+    return saved ? parseInt(saved, 10) : 30;
+  });
+
+  const [monthlyClosings, setMonthlyClosings] = useState<MonthlyClosing[]>(() => {
+    const saved = localStorage.getItem('marento_monthly_closings');
+    return saved ? JSON.parse(saved) : [];
+  });
+
   // Global Plug & Play USB/Bluetooth Barcode Scanner Listener
   useBarcodeScanner({
     onScan: () => {
@@ -169,6 +180,151 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('marento_suppliers', JSON.stringify(suppliers));
   }, [suppliers]);
+
+  useEffect(() => {
+    localStorage.setItem('marento_closing_day', closingDay.toString());
+  }, [closingDay]);
+
+  useEffect(() => {
+    localStorage.setItem('marento_monthly_closings', JSON.stringify(monthlyClosings));
+  }, [monthlyClosings]);
+
+  // Helper to compile a MonthlyClosing snapshot
+  const createClosingSnapshot = (isManual = false): MonthlyClosing | null => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const monthNum = String(now.getMonth() + 1).padStart(2, '0');
+    const monthKey = `${year}-${monthNum}`;
+
+    const monthNames = [
+      'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+      'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+    ];
+    const periodRef = `${monthNames[now.getMonth()]} / ${year}`;
+
+    const salesTxs = transactions.filter((t) => t.type === 'saida');
+    const entriesTxs = transactions.filter((t) => t.type === 'entrada');
+
+    const totalRevenue = salesTxs.reduce((acc, t) => acc + t.price * t.quantity, 0);
+    const totalQuantitySold = salesTxs.reduce((acc, t) => acc + t.quantity, 0);
+
+    const productSalesMap = new Map<string, {
+      productId: string;
+      productName: string;
+      sku: string;
+      category: string;
+      quantitySold: number;
+      totalRevenue: number;
+    }>();
+
+    salesTxs.forEach((tx) => {
+      const key = tx.productId || tx.sku || tx.productName;
+      const existing = productSalesMap.get(key) || {
+        productId: tx.productId || '',
+        productName: tx.productName,
+        sku: tx.sku || '',
+        category: tx.category || 'Outros',
+        quantitySold: 0,
+        totalRevenue: 0,
+      };
+      existing.quantitySold += tx.quantity;
+      existing.totalRevenue += tx.price * tx.quantity;
+      productSalesMap.set(key, existing);
+    });
+
+    const topProducts = Array.from(productSalesMap.values())
+      .sort((a, b) => b.totalRevenue - a.totalRevenue);
+
+    const categorySalesMap = new Map<string, {
+      categoryName: string;
+      quantitySold: number;
+      totalRevenue: number;
+    }>();
+
+    salesTxs.forEach((tx) => {
+      const cat = tx.category || 'Sem Categoria';
+      const existing = categorySalesMap.get(cat) || {
+        categoryName: cat,
+        quantitySold: 0,
+        totalRevenue: 0,
+      };
+      existing.quantitySold += tx.quantity;
+      existing.totalRevenue += tx.price * tx.quantity;
+      categorySalesMap.set(cat, existing);
+    });
+
+    const categoryBreakdown = Array.from(categorySalesMap.values())
+      .sort((a, b) => b.totalRevenue - a.totalRevenue);
+
+    const closedAtFormatted = `${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+
+    return {
+      id: `closing-${Date.now()}`,
+      monthKey,
+      periodRef,
+      closingDay,
+      closedAt: now.toISOString(),
+      closedAtFormatted,
+      totalRevenue,
+      totalQuantitySold,
+      totalSalesCount: salesTxs.length,
+      totalEntriesCount: entriesTxs.length,
+      topProducts,
+      categoryBreakdown,
+      isManual,
+    };
+  };
+
+  // Automatic Monthly Closing Check
+  useEffect(() => {
+    if (transactions.length === 0) return;
+    const now = new Date();
+    const currentDay = now.getDate();
+    const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+    if (currentDay >= closingDay) {
+      const alreadyClosed = monthlyClosings.some((c) => c.monthKey === monthKey);
+      if (!alreadyClosed) {
+        const snapshot = createClosingSnapshot(false);
+        if (snapshot && (snapshot.totalRevenue > 0 || snapshot.totalQuantitySold > 0)) {
+          setMonthlyClosings((prev) => [snapshot, ...prev]);
+        }
+      }
+    }
+  }, [closingDay, transactions, monthlyClosings]);
+
+  // Handler for Resetting Monthly / Period Data
+  const handleResetPeriodData = (saveClosingBeforeReset: boolean) => {
+    if (saveClosingBeforeReset) {
+      const snapshot = createClosingSnapshot(true);
+      if (snapshot) {
+        setMonthlyClosings((prev) => [snapshot, ...prev.filter((c) => c.id !== snapshot.id)]);
+      }
+    }
+
+    // 1. Clear transactions history
+    setTransactions([]);
+    localStorage.setItem('marento_transactions', '[]');
+
+    // 2. Reset product sales counts
+    setProducts((prev) =>
+      prev.map((p) => ({
+        ...p,
+        salesCount: 0,
+      }))
+    );
+
+    // 3. Clear temporary notifications
+    setNotifications([]);
+  };
+
+  const handleSaveMonthlyClosing = (closing: MonthlyClosing) => {
+    setMonthlyClosings((prev) => [closing, ...prev.filter((c) => c.id !== closing.id)]);
+  };
+
+  const handleDeleteMonthlyClosing = (id: string) => {
+    setMonthlyClosings((prev) => prev.filter((c) => c.id !== id));
+  };
 
   // Initial Sync & Real-Time Sync from Supabase across devices
   useEffect(() => {
@@ -786,6 +942,12 @@ export default function App() {
                 <ReportsView
                   products={products}
                   transactions={transactions}
+                  closingDay={closingDay}
+                  onUpdateClosingDay={setClosingDay}
+                  monthlyClosings={monthlyClosings}
+                  onSaveMonthlyClosing={handleSaveMonthlyClosing}
+                  onDeleteMonthlyClosing={handleDeleteMonthlyClosing}
+                  onResetPeriodData={handleResetPeriodData}
                 />
               ) : (
                 <div className="flex flex-col items-center justify-center py-16 px-4 text-center space-y-4 bg-brand-secondary/40 border border-brand-tertiary rounded-2xl max-w-md mx-auto" id="protected-reports-gate">

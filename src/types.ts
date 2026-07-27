@@ -62,3 +62,35 @@ export interface Notification {
   timestamp: number;
   read: boolean;
 }
+
+export interface MonthlyClosingProductSummary {
+  productId: string;
+  productName: string;
+  sku: string;
+  category: CategoryName;
+  quantitySold: number;
+  totalRevenue: number;
+}
+
+export interface MonthlyClosingCategorySummary {
+  categoryName: string;
+  quantitySold: number;
+  totalRevenue: number;
+}
+
+export interface MonthlyClosing {
+  id: string;
+  monthKey: string; // e.g. "2026-07"
+  periodRef: string; // e.g. "Julho / 2026"
+  closingDay: number;
+  closedAt: string; // ISO string
+  closedAtFormatted: string; // DD/MM/YYYY HH:MM
+  totalRevenue: number;
+  totalQuantitySold: number;
+  totalSalesCount: number;
+  totalEntriesCount: number;
+  topProducts: MonthlyClosingProductSummary[];
+  categoryBreakdown: MonthlyClosingCategorySummary[];
+  isManual?: boolean;
+}
+

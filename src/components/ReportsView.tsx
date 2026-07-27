@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import {
   TrendingUp,
   Percent,
@@ -18,17 +18,51 @@ import {
   ShoppingBag,
   BarChart3,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  RotateCcw,
+  Trash2,
+  BookmarkCheck,
+  CalendarCheck,
+  X,
+  Printer,
+  Eye,
+  AlertOctagon,
+  Info,
+  Sliders,
+  ChevronDown,
+  ChevronUp,
+  RefreshCw
 } from 'lucide-react';
-import { Product, Transaction } from '../types';
+import { Product, Transaction, MonthlyClosing } from '../types';
 
 interface ReportsViewProps {
   products: Product[];
   transactions: Transaction[];
+  closingDay?: number;
+  onUpdateClosingDay?: (day: number) => void;
+  monthlyClosings?: MonthlyClosing[];
+  onSaveMonthlyClosing?: (closing: MonthlyClosing) => void;
+  onDeleteMonthlyClosing?: (id: string) => void;
+  onResetPeriodData?: (saveClosingBeforeReset: boolean) => void;
 }
 
-export default function ReportsView({ products, transactions }: ReportsViewProps) {
+export default function ReportsView({
+  products,
+  transactions,
+  closingDay = 30,
+  onUpdateClosingDay,
+  monthlyClosings = [],
+  onSaveMonthlyClosing,
+  onDeleteMonthlyClosing,
+  onResetPeriodData,
+}: ReportsViewProps) {
   const [activeRange, setActiveRange] = useState<'Hoje' | 'Semana' | 'Mês'>('Mês');
+  const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+  const [saveClosingBeforeReset, setSaveClosingBeforeReset] = useState(true);
+  const [selectedClosingDetail, setSelectedClosingDetail] = useState<MonthlyClosing | null>(null);
+  const [feedbackMsg, setFeedbackMsg] = useState<{ type: 'success' | 'info'; text: string } | null>(null);
+  const [showClosingConfig, setShowClosingConfig] = useState(false);
+  const [deletingClosingId, setDeletingClosingId] = useState<string | null>(null);
 
   // Format Currency helper
   const formatCurrency = (val: number) => {
@@ -42,7 +76,6 @@ export default function ReportsView({ products, transactions }: ReportsViewProps
   const parseTxDate = (tx: Transaction): Date => {
     if (tx.timestamp) return new Date(tx.timestamp);
     if (tx.date) {
-      // Handles YYYY-MM-DD or DD/MM/YYYY
       if (tx.date.includes('-')) {
         return new Date(tx.date);
       }
@@ -61,7 +94,7 @@ export default function ReportsView({ products, transactions }: ReportsViewProps
   const sevenDaysAgo = now.getTime() - 7 * 24 * 60 * 60 * 1000;
   const thirtyDaysAgo = now.getTime() - 30 * 24 * 60 * 60 * 1000;
 
-  // 1. TODAY'S SALES VALUE ("Valor Vendido Hoje")
+  // 1. TODAY'S SALES VALUE
   const todayTransactions = transactions.filter((t) => {
     const txTime = parseTxDate(t).getTime();
     return txTime >= startOfToday;
@@ -84,7 +117,6 @@ export default function ReportsView({ products, transactions }: ReportsViewProps
     if (activeRange === 'Semana') {
       return txTime >= sevenDaysAgo;
     }
-    // 'Mês'
     return txTime >= thirtyDaysAgo;
   });
 
@@ -96,13 +128,13 @@ export default function ReportsView({ products, transactions }: ReportsViewProps
   const qtdSaidasPeriodo = periodSalesTxs.reduce((acc, t) => acc + t.quantity, 0);
   const qtdEntradasPeriodo = periodEntriesTxs.reduce((acc, t) => acc + t.quantity, 0);
 
-  // Total Invested Value in Store Inventory (Sum of cost x quantity across all products)
+  // Total Invested Value in Store Inventory
   const valorTotalInvestido = products.reduce((acc, p) => {
     const unitCost = p.costPrice && p.costPrice > 0 ? p.costPrice : p.price;
     return acc + unitCost * p.quantity;
   }, 0);
 
-  // Estimated Gross Profit (Uses real costPrice when available, falls back to estimated 35% margin)
+  // Estimated Gross Profit
   const lucroEstimadoPeriodo = periodSalesTxs.reduce((acc, t) => {
     const product = products.find((p) => p.id === t.productId || p.sku === t.sku);
     const cost = product?.costPrice && product.costPrice > 0 ? product.costPrice : t.price * 0.65;
@@ -110,12 +142,10 @@ export default function ReportsView({ products, transactions }: ReportsViewProps
     return acc + profitPerUnit * t.quantity;
   }, 0);
 
-  const ticketMedio = periodSalesTxs.length > 0 ? faturamentoPeriodo / periodSalesTxs.length : 0;
-
-  // Stock Balance (Positivo / Negativo no Estoque)
+  // Stock Balance
   const balançoUnidades = qtdEntradasPeriodo - qtdSaidasPeriodo;
 
-  // Low Stock Items (Estoque Baixo)
+  // Low Stock Items
   const lowStockProducts = products.filter((p) => p.quantity <= p.minStock);
 
   // Stock Totals
@@ -157,7 +187,6 @@ export default function ReportsView({ products, transactions }: ReportsViewProps
       ? ['SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB', 'DOM']
       : ['Semana 1', 'Semana 2', 'Semana 3', 'Semana 4'];
 
-  // Calculate proportional points for chart
   const baseValue = faturamentoPeriodo > 0 ? faturamentoPeriodo : 10000;
   const chartFactors =
     activeRange === 'Hoje'
@@ -190,6 +219,114 @@ export default function ReportsView({ products, transactions }: ReportsViewProps
 
   const areaPath = `${linePath} L ${points[points.length - 1].x} ${svgHeight - padding} L ${points[0].x} ${svgHeight - padding} Z`;
 
+  // Current month key for closing checks
+  const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const isCurrentMonthClosed = monthlyClosings.some((c) => c.monthKey === currentMonthKey);
+
+  // Manual Trigger for Monthly Closing
+  const handleTriggerManualClosing = () => {
+    const monthNames = [
+      'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+      'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+    ];
+    const periodRef = `${monthNames[now.getMonth()]} / ${now.getFullYear()}`;
+
+    const salesTxs = transactions.filter((t) => t.type === 'saida');
+    const entriesTxs = transactions.filter((t) => t.type === 'entrada');
+
+    const totalRevenue = salesTxs.reduce((acc, t) => acc + t.price * t.quantity, 0);
+    const totalQuantitySold = salesTxs.reduce((acc, t) => acc + t.quantity, 0);
+
+    const productSalesMap = new Map<string, {
+      productId: string;
+      productName: string;
+      sku: string;
+      category: string;
+      quantitySold: number;
+      totalRevenue: number;
+    }>();
+
+    salesTxs.forEach((tx) => {
+      const key = tx.productId || tx.sku || tx.productName;
+      const existing = productSalesMap.get(key) || {
+        productId: tx.productId || '',
+        productName: tx.productName,
+        sku: tx.sku || '',
+        category: tx.category || 'Outros',
+        quantitySold: 0,
+        totalRevenue: 0,
+      };
+      existing.quantitySold += tx.quantity;
+      existing.totalRevenue += tx.price * tx.quantity;
+      productSalesMap.set(key, existing);
+    });
+
+    const topProductsList = Array.from(productSalesMap.values())
+      .sort((a, b) => b.totalRevenue - a.totalRevenue);
+
+    const categorySalesMap = new Map<string, {
+      categoryName: string;
+      quantitySold: number;
+      totalRevenue: number;
+    }>();
+
+    salesTxs.forEach((tx) => {
+      const cat = tx.category || 'Sem Categoria';
+      const existing = categorySalesMap.get(cat) || {
+        categoryName: cat,
+        quantitySold: 0,
+        totalRevenue: 0,
+      };
+      existing.quantitySold += tx.quantity;
+      existing.totalRevenue += tx.price * tx.quantity;
+      categorySalesMap.set(cat, existing);
+    });
+
+    const categoryBreakdownList = Array.from(categorySalesMap.values())
+      .sort((a, b) => b.totalRevenue - a.totalRevenue);
+
+    const closedAtFormatted = `${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+
+    const snapshot: MonthlyClosing = {
+      id: `closing-${Date.now()}`,
+      monthKey: currentMonthKey,
+      periodRef,
+      closingDay,
+      closedAt: now.toISOString(),
+      closedAtFormatted,
+      totalRevenue,
+      totalQuantitySold,
+      totalSalesCount: salesTxs.length,
+      totalEntriesCount: entriesTxs.length,
+      topProducts: topProductsList,
+      categoryBreakdown: categoryBreakdownList,
+      isManual: true,
+    };
+
+    if (onSaveMonthlyClosing) {
+      onSaveMonthlyClosing(snapshot);
+    }
+
+    setFeedbackMsg({
+      type: 'success',
+      text: `Fechamento Mensal de ${periodRef} realizado e salvo com sucesso!`,
+    });
+    setTimeout(() => setFeedbackMsg(null), 5000);
+  };
+
+  // Confirm Reset Execution
+  const handleConfirmReset = () => {
+    if (onResetPeriodData) {
+      onResetPeriodData(saveClosingBeforeReset);
+    }
+    setIsResetModalOpen(false);
+    setFeedbackMsg({
+      type: 'info',
+      text: 'Os valores do mês, movimentações recentes e contadores foram zerados. Os produtos e estoque permanecem salvos!',
+    });
+    setTimeout(() => setFeedbackMsg(null), 6000);
+  };
+
   // Export functions
   const handleExportPDF = () => {
     const reportContent = `
@@ -197,6 +334,7 @@ export default function ReportsView({ products, transactions }: ReportsViewProps
 MARENTO STORE - RELATÓRIO DE DESEMPENHO
 Gerado em: ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}
 Filtro de Período: ${activeRange}
+Dia de Fechamento do Mês Configurado: Dia ${closingDay}
 ========================================
 
 DESEMPENHO FINANCEIRO:
@@ -217,8 +355,8 @@ RESUMO DO ESTOQUE ATUAL:
 - Valor Total em Estoque: ${formatCurrency(grandTotalValue)}
 - Quantidade Total de Peças: ${grandTotalQuantity} unidades
 
-ESTOQUE POR CATEGORIA:
-${categorySummaryList.map((c) => `- ${c.name}: ${formatCurrency(c.totalValue)} (${c.totalQuantity} un - ${c.percentage.toFixed(1)}%)`).join('\n')}
+FECHAMENTOS MENSAIS ARQUIVADOS (${monthlyClosings.length}):
+${monthlyClosings.map((c) => `- ${c.periodRef} | Faturamento: ${formatCurrency(c.totalRevenue)} | Vendas: ${c.totalQuantitySold} un | Encerrado em: ${c.closedAtFormatted}`).join('\n') || 'Nenhum fechamento arquivado.'}
 
 ========================================
 Fim do Relatório - Marento Store Luxury Control
@@ -253,15 +391,149 @@ Fim do Relatório - Marento Store Luxury Control
   return (
     <div className="space-y-6 pb-24" id="reports-view-root">
       
-      {/* Page Title */}
-      <div className="space-y-1" id="reports-header">
-        <h2 className="font-serif font-semibold text-2xl text-brand-neutral tracking-tight">
-          Relatórios & Performance
-        </h2>
-        <p className="text-xs text-gray-500 font-sans">
-          Métricas de faturamento, vendas e movimentação do estoque.
-        </p>
+      {/* Top Header & Reset Action Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-brand-tertiary/60 pb-4" id="reports-header">
+        <div className="space-y-1">
+          <h2 className="font-serif font-semibold text-2xl text-brand-neutral tracking-tight flex items-center gap-2">
+            Relatórios & Fechamento
+          </h2>
+          <p className="text-xs text-gray-400 font-sans">
+            Métricas de faturamento, dia de fechamento mensal e reset de ciclo.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2.5">
+          {/* Closing Day Configuration Toggle Button */}
+          <button
+            onClick={() => setShowClosingConfig(!showClosingConfig)}
+            className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-brand-secondary border border-brand-primary/40 text-brand-primary font-bold text-xs hover:bg-brand-primary/10 transition cursor-pointer shadow-sm"
+            id="reports-btn-closing-day"
+          >
+            <CalendarCheck className="w-4 h-4 text-brand-primary" />
+            <span>Dia do Fechamento: <strong className="text-white">Dia {closingDay}</strong></span>
+            {showClosingConfig ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+          </button>
+
+          {/* Exclusive Zerar Valores Button */}
+          <button
+            onClick={() => setIsResetModalOpen(true)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-950/80 to-rose-950/80 hover:from-amber-900 hover:to-rose-900 border border-amber-500/50 text-amber-200 font-bold text-xs transition cursor-pointer shadow-lg hover:scale-102"
+            id="reports-btn-reset-period"
+          >
+            <RotateCcw className="w-4 h-4 text-amber-400" />
+            <span>Zerar Relatório do Mês</span>
+          </button>
+        </div>
       </div>
+
+      {/* Feedback Banner */}
+      {feedbackMsg && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0 }}
+          className={`p-4 rounded-xl border flex items-center justify-between gap-3 text-xs font-bold ${
+            feedbackMsg.type === 'success'
+              ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300'
+              : 'bg-amber-950/60 border-amber-500/40 text-amber-300'
+          }`}
+          id="reports-feedback-banner"
+        >
+          <div className="flex items-center gap-2.5">
+            {feedbackMsg.type === 'success' ? <CheckCircle2 className="w-5 h-5 shrink-0" /> : <Info className="w-5 h-5 shrink-0" />}
+            <span>{feedbackMsg.text}</span>
+          </div>
+          <button onClick={() => setFeedbackMsg(null)} className="p-1 hover:opacity-75 cursor-pointer">
+            <X className="w-4 h-4" />
+          </button>
+        </motion.div>
+      )}
+
+      {/* Closing Day Selector & Auto-Closing Settings Panel */}
+      <AnimatePresence>
+        {showClosingConfig && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="overflow-hidden"
+            id="reports-closing-config-panel"
+          >
+            <div className="p-5 rounded-2xl bg-brand-secondary border border-brand-primary/40 space-y-4 shadow-xl">
+              <div className="flex items-center justify-between border-b border-brand-tertiary/40 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2.5 rounded-xl bg-brand-primary/10 border border-brand-primary/30 text-brand-primary">
+                    <Sliders className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-serif font-bold text-sm text-brand-neutral">Sistema de Fechamento Mensal</h3>
+                    <p className="text-[11px] text-gray-400">Escolha o dia em que o sistema salva as vendas do mês e resumos de produtos.</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowClosingConfig(false)}
+                  className="p-1.5 rounded-lg bg-brand-bg text-gray-400 hover:text-white"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
+                {/* Day selector dropdown */}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold text-gray-300 uppercase tracking-wider block">
+                    Dia do Mês de Fechamento
+                  </label>
+                  <select
+                    value={closingDay}
+                    onChange={(e) => {
+                      const dayVal = Number(e.target.value);
+                      if (onUpdateClosingDay) onUpdateClosingDay(dayVal);
+                      setFeedbackMsg({
+                        type: 'info',
+                        text: `Dia de fechamento atualizado para todo dia ${dayVal} de cada mês.`,
+                      });
+                      setTimeout(() => setFeedbackMsg(null), 4000);
+                    }}
+                    className="w-full bg-brand-bg border border-brand-tertiary rounded-xl px-3.5 py-2.5 text-xs text-brand-neutral font-bold focus:outline-none focus:border-brand-primary cursor-pointer"
+                    id="reports-select-closing-day"
+                  >
+                    {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
+                      <option key={`closing-day-opt-${day}`} value={day}>
+                        Dia {day} {day === 31 ? '(ou último dia do mês)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Info status badge */}
+                <div className="p-3 bg-brand-bg/60 rounded-xl border border-brand-tertiary/40 space-y-1">
+                  <span className="text-[10px] uppercase font-bold text-gray-400 block">Status do Mês Atual ({currentMonthKey})</span>
+                  {isCurrentMonthClosed ? (
+                    <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-400">
+                      <CheckCircle2 className="w-3.5 h-3.5" /> Fechamento de {currentMonthKey} já arquivado!
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-300">
+                      <Clock className="w-3.5 h-3.5" /> Agendado para dia {closingDay}
+                    </span>
+                  )}
+                </div>
+
+                {/* Manual closing trigger button */}
+                <button
+                  onClick={handleTriggerManualClosing}
+                  className="flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-brand-primary text-black font-bold text-xs hover:bg-brand-primary/90 transition shadow-md cursor-pointer"
+                  id="reports-btn-manual-close"
+                >
+                  <BookmarkCheck className="w-4 h-4" />
+                  <span>Realizar Fechamento Agora</span>
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Period Filter Selector (HOJE, SEMANA, MÊS) */}
       <div className="flex gap-2 overflow-x-auto pb-1" id="reports-range-selector">
@@ -312,7 +584,7 @@ Fim do Relatório - Marento Store Luxury Control
       {/* Secondary Metrics Row: Balanço do Estoque (+/-) & Estoque Baixo */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5" id="reports-secondary-grid">
         
-        {/* Balanço de Estoque Card (Positivo / Negativo) */}
+        {/* Balanço de Estoque Card */}
         <div className="rounded-2xl bg-brand-secondary p-4 border border-brand-tertiary/60 space-y-2.5" id="reports-card-balanco">
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
@@ -379,7 +651,7 @@ Fim do Relatório - Marento Store Luxury Control
 
       </div>
 
-      {/* Financial Overview Cards Row: Faturamento + Lucro Estimado + Valor Total Investido */}
+      {/* Financial Overview Cards Row */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3" id="reports-financial-cards">
         <div className="rounded-2xl bg-brand-secondary p-3.5 border border-brand-tertiary/60" id="reports-card-fat">
           <span className="block text-[9px] font-bold uppercase text-gray-400 tracking-wider mb-1">
@@ -526,17 +798,6 @@ Fim do Relatório - Marento Store Luxury Control
             ))
           )}
         </div>
-
-        <div className="grid grid-cols-2 gap-4 pt-3 border-t border-brand-tertiary/40 text-center" id="reports-cat-stock-summary">
-          <div className="p-2 bg-brand-bg/30 border border-brand-tertiary/40 rounded-xl">
-            <span className="block text-[9px] text-gray-500 uppercase font-bold tracking-wider mb-0.5">Categorias</span>
-            <span className="font-serif text-sm font-bold text-brand-neutral">{categorySummaryList.length}</span>
-          </div>
-          <div className="p-2 bg-brand-bg/30 border border-brand-tertiary/40 rounded-xl">
-            <span className="block text-[9px] text-gray-500 uppercase font-bold tracking-wider mb-0.5">Total Itens</span>
-            <span className="font-serif text-sm font-bold text-brand-neutral">{grandTotalQuantity} un</span>
-          </div>
-        </div>
       </div>
 
       {/* Produtos Mais Vendidos Section */}
@@ -575,6 +836,85 @@ Fim do Relatório - Marento Store Luxury Control
         </div>
       </div>
 
+      {/* Archived Monthly Closings Section */}
+      <div className="rounded-2xl bg-brand-secondary p-5 border border-brand-tertiary space-y-4" id="reports-monthly-closings-card">
+        <div className="flex items-center justify-between border-b border-brand-tertiary/40 pb-3">
+          <div className="space-y-1">
+            <h3 className="font-serif font-semibold text-lg text-brand-neutral tracking-tight flex items-center gap-2">
+              <BookmarkCheck className="w-5 h-5 text-brand-primary" />
+              Histórico de Fechamentos Mensais Arquivados
+            </h3>
+            <p className="text-xs text-gray-400">
+              Registros congelados contendo vendas, faturamento e top produtos dos meses salvos.
+            </p>
+          </div>
+          <span className="text-xs font-bold px-3 py-1 rounded-full bg-brand-primary/10 border border-brand-primary/30 text-brand-primary">
+            {monthlyClosings.length} {monthlyClosings.length === 1 ? 'mês salvo' : 'meses salvos'}
+          </span>
+        </div>
+
+        {monthlyClosings.length === 0 ? (
+          <div className="p-6 text-center bg-brand-bg/40 rounded-xl border border-brand-tertiary/30 space-y-2">
+            <CalendarCheck className="w-8 h-8 text-gray-500 mx-auto" />
+            <p className="text-xs text-gray-400">
+              Nenhum fechamento mensal arquivado ainda. O sistema irá salvar automaticamente no dia <strong className="text-brand-primary">{closingDay}</strong> do mês ou quando acionado manualmente.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+            {monthlyClosings.map((closing) => (
+              <div
+                key={`closing-card-${closing.id}`}
+                className="p-4 rounded-xl bg-brand-bg/80 border border-brand-tertiary hover:border-brand-primary/50 transition space-y-3 relative group"
+              >
+                <div className="flex items-start justify-between">
+                  <div>
+                    <span className="text-[10px] font-bold text-brand-primary uppercase tracking-wider block">
+                      Período Ref.
+                    </span>
+                    <h4 className="font-serif font-bold text-base text-brand-neutral">{closing.periodRef}</h4>
+                    <span className="text-[10px] text-gray-500 block">
+                      Encerrado em: {closing.closedAtFormatted} {closing.isManual ? '(Manual)' : `(Dia ${closing.closingDay})`}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setSelectedClosingDetail(closing)}
+                      className="p-2 rounded-lg bg-brand-secondary hover:bg-brand-primary/20 text-brand-primary border border-brand-tertiary transition cursor-pointer"
+                      title="Ver Detalhes do Fechamento"
+                    >
+                      <Eye className="w-4 h-4" />
+                    </button>
+                    {onDeleteMonthlyClosing && (
+                      <button
+                        onClick={() => onDeleteMonthlyClosing(closing.id)}
+                        className="p-2 rounded-lg bg-brand-secondary hover:bg-rose-950/60 text-rose-400 border border-brand-tertiary transition cursor-pointer"
+                        title="Excluir Registro de Fechamento"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 pt-1 border-t border-brand-tertiary/30">
+                  <div className="p-2 bg-brand-secondary/60 rounded-lg">
+                    <span className="block text-[9px] text-gray-400 uppercase font-bold">Faturamento Total</span>
+                    <span className="font-serif font-bold text-xs text-brand-primary">{formatCurrency(closing.totalRevenue)}</span>
+                  </div>
+
+                  <div className="p-2 bg-brand-secondary/60 rounded-lg">
+                    <span className="block text-[9px] text-gray-400 uppercase font-bold">Peças Vendidas</span>
+                    <span className="font-serif font-bold text-xs text-brand-neutral">{closing.totalQuantitySold} un</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* Export Buttons */}
       <div className="grid grid-cols-2 gap-3 pt-2" id="reports-export-row">
         <button
@@ -583,7 +923,7 @@ Fim do Relatório - Marento Store Luxury Control
           id="reports-btn-pdf"
         >
           <FileText className="w-4 h-4 text-brand-primary" />
-          Exportar Relatório PDF
+          Exportar Relatório TXT
         </button>
 
         <button
@@ -595,6 +935,188 @@ Fim do Relatório - Marento Store Luxury Control
           Exportar Excel CSV
         </button>
       </div>
+
+      {/* MODAL 1: Confirmação para Zerar Valores do Relatório */}
+      <AnimatePresence>
+        {isResetModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" id="reset-modal-backdrop">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="w-full max-w-lg bg-brand-secondary border border-amber-500/40 rounded-2xl p-6 shadow-2xl space-y-5"
+              id="reset-modal-window"
+            >
+              <div className="flex items-start gap-4">
+                <div className="p-3 rounded-2xl bg-amber-950/80 border border-amber-500/50 text-amber-400 shrink-0">
+                  <AlertOctagon className="w-8 h-8" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="font-serif font-bold text-lg text-brand-neutral">
+                    Zerar Relatório & Atividades do Mês?
+                  </h3>
+                  <p className="text-xs text-gray-400 leading-relaxed">
+                    Esta ação irá limpar os registros do ciclo de vendas para iniciar um novo período limpo.
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-4 rounded-xl bg-brand-bg/80 border border-brand-tertiary/60 space-y-2 text-xs text-gray-300">
+                <p className="font-bold text-amber-300 flex items-center gap-1.5">
+                  <Info className="w-4 h-4" /> O que será zerado / removido:
+                </p>
+                <ul className="list-disc list-inside space-y-1 text-gray-400 pl-1">
+                  <li>Histórico de movimentações recentes (entradas e saídas)</li>
+                  <li>Contador de vendas individuais por produto (salesCount = 0)</li>
+                  <li>Log de notificações temporárias do sistema</li>
+                </ul>
+                <div className="pt-2 border-t border-brand-tertiary/40 text-[11px] text-emerald-400 font-bold">
+                  ✓ Seu cadastro de produtos, categorias, fornecedores e o SALDO ATUAL DO ESTOQUE permanecerão 100% seguros!
+                </div>
+              </div>
+
+              {/* Checkbox to save a closing snapshot before reset */}
+              <label className="flex items-center gap-3 p-3 bg-brand-bg/50 border border-brand-tertiary rounded-xl cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={saveClosingBeforeReset}
+                  onChange={(e) => setSaveClosingBeforeReset(e.target.checked)}
+                  className="w-4 h-4 accent-brand-primary rounded cursor-pointer"
+                />
+                <span className="text-xs text-brand-neutral font-medium">
+                  Salvar um <strong>Fechamento Mensal</strong> automático com o faturamento atual antes de zerar.
+                </span>
+              </label>
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsResetModalOpen(false)}
+                  className="px-4 py-2.5 rounded-xl bg-brand-bg hover:bg-brand-tertiary text-gray-300 font-bold text-xs border border-brand-tertiary cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmReset}
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-rose-600 hover:from-amber-500 hover:to-rose-500 text-black font-bold text-xs shadow-lg cursor-pointer transition"
+                >
+                  Sim, Zerar Dados do Mês
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* MODAL 2: Detalhes do Fechamento Mensal Arquivado */}
+      <AnimatePresence>
+        {selectedClosingDetail && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" id="closing-detail-backdrop">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="w-full max-w-2xl bg-brand-secondary border border-brand-primary/40 rounded-2xl p-6 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto"
+              id="closing-detail-window"
+            >
+              <div className="flex items-center justify-between border-b border-brand-tertiary/50 pb-3">
+                <div className="space-y-0.5">
+                  <span className="text-[10px] font-bold text-brand-primary uppercase tracking-widest block">
+                    Registro de Fechamento Mensal
+                  </span>
+                  <h3 className="font-serif font-bold text-xl text-brand-neutral">
+                    {selectedClosingDetail.periodRef}
+                  </h3>
+                  <span className="text-xs text-gray-400 block">
+                    Arquivado em: {selectedClosingDetail.closedAtFormatted}
+                  </span>
+                </div>
+                <button
+                  onClick={() => setSelectedClosingDetail(null)}
+                  className="p-2 rounded-xl bg-brand-bg text-gray-400 hover:text-white border border-brand-tertiary cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* KPI Summary Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                <div className="p-3 bg-brand-bg rounded-xl border border-brand-tertiary/40">
+                  <span className="text-[9px] uppercase font-bold text-gray-400 block">Faturamento</span>
+                  <span className="font-serif font-bold text-sm text-brand-primary">{formatCurrency(selectedClosingDetail.totalRevenue)}</span>
+                </div>
+                <div className="p-3 bg-brand-bg rounded-xl border border-brand-tertiary/40">
+                  <span className="text-[9px] uppercase font-bold text-gray-400 block">Peças Vendidas</span>
+                  <span className="font-serif font-bold text-sm text-brand-neutral">{selectedClosingDetail.totalQuantitySold} un</span>
+                </div>
+                <div className="p-3 bg-brand-bg rounded-xl border border-brand-tertiary/40">
+                  <span className="text-[9px] uppercase font-bold text-gray-400 block">Op. Vendas</span>
+                  <span className="font-serif font-bold text-sm text-brand-neutral">{selectedClosingDetail.totalSalesCount}</span>
+                </div>
+                <div className="p-3 bg-brand-bg rounded-xl border border-brand-tertiary/40">
+                  <span className="text-[9px] uppercase font-bold text-gray-400 block">Op. Entradas</span>
+                  <span className="font-serif font-bold text-sm text-brand-neutral">{selectedClosingDetail.totalEntriesCount}</span>
+                </div>
+              </div>
+
+              {/* Top Products Table */}
+              <div className="space-y-2">
+                <h4 className="font-serif font-bold text-xs text-gray-300 uppercase tracking-wider">
+                  Resumo de Vendas por Produto
+                </h4>
+                <div className="bg-brand-bg rounded-xl border border-brand-tertiary overflow-hidden">
+                  {selectedClosingDetail.topProducts.length === 0 ? (
+                    <p className="text-xs text-gray-500 p-4 text-center">Nenhum produto registrado para este fechamento.</p>
+                  ) : (
+                    <div className="max-h-48 overflow-y-auto divide-y divide-brand-tertiary/40 text-xs">
+                      {selectedClosingDetail.topProducts.map((p, pIdx) => (
+                        <div key={`closing-prod-${p.productId || pIdx}-${pIdx}`} className="p-3 flex items-center justify-between hover:bg-brand-secondary/40">
+                          <div>
+                            <span className="font-bold text-brand-neutral block">{p.productName}</span>
+                            <span className="text-[10px] text-gray-500">SKU: {p.sku || '-'} | Cat: {p.category}</span>
+                          </div>
+                          <div className="text-right font-mono">
+                            <span className="font-bold text-brand-primary block">{p.quantitySold} un</span>
+                            <span className="text-[10px] text-gray-400">{formatCurrency(p.totalRevenue)}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Category Breakdown */}
+              {selectedClosingDetail.categoryBreakdown.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="font-serif font-bold text-xs text-gray-300 uppercase tracking-wider">
+                    Vendas por Categoria
+                  </h4>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {selectedClosingDetail.categoryBreakdown.map((c, cIdx) => (
+                      <div key={`closing-cat-${c.categoryName || cIdx}-${cIdx}`} className="p-2.5 bg-brand-bg rounded-xl border border-brand-tertiary/40 text-xs">
+                        <span className="font-bold text-brand-neutral block truncate">{c.categoryName}</span>
+                        <span className="text-[10px] text-brand-primary font-mono block">{c.quantitySold} un | {formatCurrency(c.totalRevenue)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end pt-3 border-t border-brand-tertiary/40">
+                <button
+                  type="button"
+                  onClick={() => setSelectedClosingDetail(null)}
+                  className="px-5 py-2 rounded-xl bg-brand-primary text-black font-bold text-xs hover:bg-brand-primary/90 transition cursor-pointer"
+                >
+                  Fechar
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
     </div>
   );
