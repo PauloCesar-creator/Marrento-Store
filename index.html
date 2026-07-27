@@ -6,20 +6,29 @@
     <title>Marento Store - Painel de Estoque de Luxo</title>
 
     <!-- Web App / Home Screen Shortcut Icons -->
-    <link rel="icon" type="image/jpeg" href="/logo.jpg" />
-    <link rel="shortcut icon" href="/logo.jpg" type="image/jpeg" />
-    <link rel="apple-touch-icon" href="/logo.jpg" />
-    <link rel="apple-touch-icon" sizes="180x180" href="/logo.jpg" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
+    <link rel="shortcut icon" href="/icon-192.png" type="image/png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
 
     <!-- Web App Manifest for Mobile Shortcuts -->
     <link rel="manifest" href="/manifest.json" />
 
-    <!-- Mobile web app meta tags -->
+    <!-- Mobile web app meta tags for standalone full-screen view without browser address bar -->
+    <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Marento Store" />
     <meta name="application-name" content="Marento Store" />
     <meta name="theme-color" content="#121212" />
+
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js').catch(() => {});
+        });
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>
