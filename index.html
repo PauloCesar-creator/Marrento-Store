@@ -2,30 +2,42 @@
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>Marento Store - Painel de Estoque de Luxo</title>
 
-    <!-- Web App / Home Screen Shortcut Icons -->
+    <!-- Standard Favicons -->
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
     <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
-    <link rel="shortcut icon" href="/icon-192.png" type="image/png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png" />
+    <link rel="shortcut icon" href="/favicon.ico" />
+
+    <!-- Apple iOS Home Screen Icons -->
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="apple-touch-icon-precomposed" href="/apple-touch-icon-precomposed.png" />
 
-    <!-- Web App Manifest for Mobile Shortcuts -->
+    <!-- Web App Manifest for Android / Chrome PWA -->
     <link rel="manifest" href="/manifest.json" />
 
-    <!-- Mobile web app meta tags for standalone full-screen view without browser address bar -->
+    <!-- Mobile Full-screen & PWA standalone mode tags -->
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Marento Store" />
     <meta name="application-name" content="Marento Store" />
     <meta name="theme-color" content="#121212" />
+    <meta name="msapplication-TileColor" content="#121212" />
+    <meta name="msapplication-TileImage" content="/icon-192.png" />
 
+    <!-- Service Worker Registration -->
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js').catch(() => {});
+          navigator.serviceWorker.register('/sw.js').catch((err) => {
+            console.warn('SW registration error:', err);
+          });
         });
       }
     </script>
