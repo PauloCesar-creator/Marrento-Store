@@ -1,8 +1,17 @@
 /// <reference types="vite/client" />
 import { createClient } from '@supabase/supabase-js';
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://pppyusvkcqlaofokwano.supabase.co';
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBwcHl1c3ZrY3FsYW9mb2t3YW5vIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4MTQ5ODMsImV4cCI6MjEwMDM5MDk4M30.-OlctS79v6XSEkPi6W5gh4quPF1zM3HWtMpzYnNhFbE';
+// Supabase configuration - Connected to the new database: udkeikmmbroznlwfrbgx
+export const SUPABASE_URL =
+  import.meta.env.VITE_SUPABASE_URL ||
+  (import.meta as any).env?.NEXT_PUBLIC_SUPABASE_URL ||
+  'https://udkeikmmbroznlwfrbgx.supabase.co';
+
+export const SUPABASE_ANON_KEY =
+  import.meta.env.VITE_SUPABASE_ANON_KEY ||
+  (import.meta as any).env?.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+  (import.meta as any).env?.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVka2Vpa21tYnJvem5sd2ZyYmd4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE5NTc3ODEsImV4cCI6MjEwNzUzMzc4MX0.oEdfgaQo27rUlY-eapI0AN6k4lnUPVbKAso6wv2kY_s';
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -29,7 +38,14 @@ export async function checkDatabaseConnection(): Promise<ConnectionStatus> {
     const endTime = performance.now();
     const latencyMs = Math.round(endTime - startTime);
 
-    const requiredTables = ['categories', 'suppliers', 'products', 'product_variants', 'transactions', 'notifications'];
+    const requiredTables = [
+      'categories',
+      'suppliers',
+      'products',
+      'product_variants',
+      'transactions',
+      'notifications'
+    ];
     const tablesFound: string[] = [];
     const tablesMissing: string[] = [];
 
@@ -47,7 +63,7 @@ export async function checkDatabaseConnection(): Promise<ConnectionStatus> {
     if (catError && catError.code === '42P01') {
       return {
         isConnected: false,
-        message: 'Conectado ao Supabase, mas as tabelas ainda não foram criadas no banco de dados SQL Editor!',
+        message: 'Conectado ao Supabase, mas as tabelas ainda não foram criadas no banco! Execute o script SQL no SQL Editor.',
         url: SUPABASE_URL,
         tablesFound,
         tablesMissing,
@@ -58,7 +74,7 @@ export async function checkDatabaseConnection(): Promise<ConnectionStatus> {
     if (tablesMissing.length > 0) {
       return {
         isConnected: true,
-        message: `Conectado ao Supabase! Algumas tabelas faltam (${tablesMissing.join(', ')}). Execute o script SQL no Supabase.`,
+        message: `Conectado ao Supabase! Algumas tabelas faltam (${tablesMissing.join(', ')}). Copie e execute o script SQL.`,
         url: SUPABASE_URL,
         tablesFound,
         tablesMissing,

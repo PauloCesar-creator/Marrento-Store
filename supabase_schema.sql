@@ -1,37 +1,37 @@
 -- ==============================================================================
--- MARENTO LUXURY STORE - SCHEMA COMPLETO DE BANCO DE DADOS (POSTGRESQL / SUPABASE)
+-- MARENTO STORE - SCHEMA COMPLETO DE BANCO DE DADOS (SUPABASE / POSTGRESQL)
 -- ==============================================================================
--- Copie e cole todo este script no SQL Editor do seu Supabase para criar a estrutura completa.
+-- TABELAS LIMPAS (SEM DADOS INICIAIS / SEED)
+-- O cliente tem total controle para criar suas próprias categorias, fornecedores e produtos.
+--
+-- INSTRUÇÕES DE INSTALAÇÃO NO SUPABASE:
+-- 1. Acesse https://supabase.com/dashboard/project/udkeikmmbroznlwfrbgx
+-- 2. No menu lateral esquerdo, clique em "SQL Editor".
+-- 3. Clique em "+ New query" (Nova consulta).
+-- 4. Cole todo este código e clique no botão verde "Run" (Executar).
+-- 5. Todas as tabelas estarão prontas no Table Editor limpas para seu cliente cadastrar!
+-- ==============================================================================
 
--- 1. Habilitar extensão para geração automática de UUIDs
+-- 1. Extensões para identificadores únicos (UUID)
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- ==============================================================================
--- TABELA: CATEGORIAS (categories)
+-- 2. TABELA: CATEGORIAS (categories)
 -- ==============================================================================
 CREATE TABLE IF NOT EXISTS public.categories (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    name VARCHAR(100) NOT NULL UNIQUE,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(120) NOT NULL UNIQUE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Index para busca rápida por nome de categoria
 CREATE INDEX IF NOT EXISTS idx_categories_name ON public.categories(name);
 
--- Desabilitar RLS em todas as tabelas para permitir acesso direto com chave anon sem restrições
-ALTER TABLE IF EXISTS public.categories DISABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS public.suppliers DISABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS public.products DISABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS public.product_variants DISABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS public.transactions DISABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS public.financial_entries DISABLE ROW LEVEL SECURITY;
-ALTER TABLE IF EXISTS public.notifications DISABLE ROW LEVEL SECURITY;
-
 -- ==============================================================================
--- TABELA: FORNECEDORES (suppliers)
+-- 3. TABELA: FORNECEDORES (suppliers)
 -- ==============================================================================
 CREATE TABLE IF NOT EXISTS public.suppliers (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name VARCHAR(150) NOT NULL UNIQUE,
     contact_email VARCHAR(150),
     contact_phone VARCHAR(50),
@@ -39,39 +39,42 @@ CREATE TABLE IF NOT EXISTS public.suppliers (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+CREATE INDEX IF NOT EXISTS idx_suppliers_name ON public.suppliers(name);
+
 -- ==============================================================================
--- TABELA: PRODUTOS (products)
+-- 4. TABELA: PRODUTOS (products)
 -- ==============================================================================
 CREATE TABLE IF NOT EXISTS public.products (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     sku VARCHAR(100) NOT NULL UNIQUE,
     name VARCHAR(255) NOT NULL,
-    category VARCHAR(100) NOT NULL,
+    category VARCHAR(120) NOT NULL,
     supplier VARCHAR(150) DEFAULT 'Direto com Fabricante',
     price NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
     cost_price NUMERIC(12, 2) DEFAULT 0.00,
     quantity INT NOT NULL DEFAULT 0,
     min_stock INT NOT NULL DEFAULT 1,
     image_url TEXT,
+    description TEXT,
+    sales_count INT DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Indexes para acelerar relatórios e buscas de código de barras
 CREATE INDEX IF NOT EXISTS idx_products_sku ON public.products(sku);
 CREATE INDEX IF NOT EXISTS idx_products_category ON public.products(category);
 CREATE INDEX IF NOT EXISTS idx_products_name ON public.products(name);
 
 -- ==============================================================================
--- TABELA: VARIAÇÕES DE PRODUTO (product_variants)
+-- 5. TABELA: VARIAÇÕES DE PRODUTO (product_variants)
 -- ==============================================================================
 CREATE TABLE IF NOT EXISTS public.product_variants (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     product_id UUID NOT NULL REFERENCES public.products(id) ON DELETE CASCADE,
-    sku VARCHAR(100) UNIQUE,
-    name VARCHAR(100) NOT NULL, -- Ex: "Dourado / Tam 42", "Preto Luxo / P"
+    sku VARCHAR(120) UNIQUE,
+    name VARCHAR(120) NOT NULL,
     quantity INT NOT NULL DEFAULT 0,
-    price NUMERIC(12, 2), -- Nulo se seguir o preço do produto principal
+    price NUMERIC(12, 2),
     image_url TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -81,35 +84,70 @@ CREATE INDEX IF NOT EXISTS idx_variants_product_id ON public.product_variants(pr
 CREATE INDEX IF NOT EXISTS idx_variants_sku ON public.product_variants(sku);
 
 -- ==============================================================================
--- TABELA: MOVIMENTAÇÕES DE ESTOQUE E TRANSAÇÕES (transactions)
+-- 6. TABELA: MOVIMENTAÇÕES DE ESTOQUE E TRANSAÇÕES (transactions)
 -- ==============================================================================
 CREATE TABLE IF NOT EXISTS public.transactions (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     product_id UUID REFERENCES public.products(id) ON DELETE SET NULL,
     product_name VARCHAR(255) NOT NULL,
     sku VARCHAR(100) NOT NULL,
     type VARCHAR(20) NOT NULL CHECK (type IN ('entrada', 'saida')),
-    category VARCHAR(100) NOT NULL,
+    category VARCHAR(120) NOT NULL,
     quantity INT NOT NULL DEFAULT 1,
     price NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
     total_amount NUMERIC(12, 2) GENERATED ALWAYS AS (quantity * price) STORED,
-    date VARCHAR(20) NOT NULL, -- Formato: YYYY-MM-DD
-    time VARCHAR(20) NOT NULL, -- Formato: HH:MM:SS
+    date VARCHAR(20) NOT NULL,
+    time VARCHAR(20) NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_transactions_type ON public.transactions(type);
 CREATE INDEX IF NOT EXISTS idx_transactions_date ON public.transactions(date);
 CREATE INDEX IF NOT EXISTS idx_transactions_product_id ON public.transactions(product_id);
+CREATE INDEX IF NOT EXISTS idx_transactions_created_at ON public.transactions(created_at DESC);
 
 -- ==============================================================================
--- TABELA: FINANÇAS E FLUXO DE CAIXA (financial_entries)
+-- 7. TABELA: NOTIFICAÇÕES (notifications)
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.notifications (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    title VARCHAR(200) NOT NULL,
+    message TEXT NOT NULL,
+    type VARCHAR(50) NOT NULL DEFAULT 'info' CHECK (type IN ('low_stock', 'system', 'info', 'warning')),
+    product_id UUID REFERENCES public.products(id) ON DELETE SET NULL,
+    read BOOLEAN NOT NULL DEFAULT FALSE,
+    date VARCHAR(20) NOT NULL,
+    time VARCHAR(20) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_read ON public.notifications(read);
+CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON public.notifications(created_at DESC);
+
+-- ==============================================================================
+-- 8. TABELA: FECHAMENTOS MENSAIS (monthly_closings)
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.monthly_closings (
+    id VARCHAR(120) PRIMARY KEY,
+    month VARCHAR(50) NOT NULL,
+    period_ref VARCHAR(100) NOT NULL,
+    total_revenue NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+    total_cost NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+    net_profit NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+    total_quantity_sold INT NOT NULL DEFAULT 0,
+    top_products JSONB,
+    category_breakdown JSONB,
+    closed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- ==============================================================================
+-- 9. TABELA: FLUXO DE CAIXA E FINANCEIRO (financial_entries)
 -- ==============================================================================
 CREATE TABLE IF NOT EXISTS public.financial_entries (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     transaction_id UUID REFERENCES public.transactions(id) ON DELETE SET NULL,
     type VARCHAR(20) NOT NULL CHECK (type IN ('receita', 'despesa')),
-    category VARCHAR(100) NOT NULL,
+    category VARCHAR(120) NOT NULL,
     description VARCHAR(255) NOT NULL,
     amount NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
     payment_method VARCHAR(50) DEFAULT 'PIX / Cartão',
@@ -122,54 +160,32 @@ CREATE INDEX IF NOT EXISTS idx_financial_type ON public.financial_entries(type);
 CREATE INDEX IF NOT EXISTS idx_financial_date ON public.financial_entries(entry_date);
 
 -- ==============================================================================
--- TABELA: NOTIFICAÇÕES E ALERTAS DE ESTOQUE (notifications)
+-- 10. PERMISSÕES E ACESSO ANÔNIMO DIRETO
 -- ==============================================================================
-CREATE TABLE IF NOT EXISTS public.notifications (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    title VARCHAR(200) NOT NULL,
-    message TEXT NOT NULL,
-    type VARCHAR(50) NOT NULL CHECK (type IN ('low_stock', 'system', 'info', 'warning')),
-    product_id UUID REFERENCES public.products(id) ON DELETE SET NULL,
-    read BOOLEAN NOT NULL DEFAULT FALSE,
-    date VARCHAR(20) NOT NULL,
-    time VARCHAR(20) NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
+ALTER TABLE public.categories DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.suppliers DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.products DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.product_variants DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.transactions DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.notifications DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.monthly_closings DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.financial_entries DISABLE ROW LEVEL SECURITY;
 
-CREATE INDEX IF NOT EXISTS idx_notifications_read ON public.notifications(read);
-
--- ==============================================================================
--- TRIGGER PARA ATUALIZAÇÃO AUTOMÁTICA DE TIMESTAMP (updated_at)
--- ==============================================================================
-CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = NOW();
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER update_products_updated_at
-    BEFORE UPDATE ON public.products
-    FOR EACH ROW
-    EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_variants_updated_at
-    BEFORE UPDATE ON public.product_variants
-    FOR EACH ROW
-    EXECUTE FUNCTION update_updated_at_column();
+GRANT ALL ON TABLE public.categories TO anon, authenticated, service_role;
+GRANT ALL ON TABLE public.suppliers TO anon, authenticated, service_role;
+GRANT ALL ON TABLE public.products TO anon, authenticated, service_role;
+GRANT ALL ON TABLE public.product_variants TO anon, authenticated, service_role;
+GRANT ALL ON TABLE public.transactions TO anon, authenticated, service_role;
+GRANT ALL ON TABLE public.notifications TO anon, authenticated, service_role;
+GRANT ALL ON TABLE public.monthly_closings TO anon, authenticated, service_role;
+GRANT ALL ON TABLE public.financial_entries TO anon, authenticated, service_role;
 
 -- ==============================================================================
--- SEED Opcional: Inserção de Dados Iniciais de Teste
+-- 11. HABILITAR SINCRONIZAÇÃO EM TEMPO REAL (REALTIME)
 -- ==============================================================================
-INSERT INTO public.suppliers (name) VALUES 
-('Marento Importação Direct'), 
-('Milano Leather Co.'), 
-('Ateliê Joias do Sul')
-ON CONFLICT (name) DO NOTHING;
-
-INSERT INTO public.categories (name) VALUES 
-('Relógios de Luxo'), 
-('Bolsas e Acessórios'), 
-('Alta Joalheria')
-ON CONFLICT (name) DO NOTHING;
+DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.categories; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.suppliers; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.products; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.product_variants; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.transactions; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.notifications; EXCEPTION WHEN OTHERS THEN NULL; END $$;
