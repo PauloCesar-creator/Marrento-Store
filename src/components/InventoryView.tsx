@@ -5,6 +5,7 @@ import { Product, CategoryName } from '../types';
 import SmartPanelModal from './SmartPanelModal';
 import QuickStockModal from './QuickStockModal';
 import ProductDetailModal from './ProductDetailModal';
+import NewItemModal from './NewItemModal';
 
 interface InventoryViewProps {
   products: Product[];
@@ -276,10 +277,50 @@ export default function InventoryView({
             id="inv-btn-add"
           >
             <Plus className="w-4 h-4 stroke-[2.5]" />
-            Novo Produto
+            Novo Item
           </button>
         </div>
       </div>
+
+      {/* Prominent High-Contrast "Cadastrar Novo Item" Action Button (Styled like Dashboard card, exclusively on Estoque page) */}
+      <motion.div
+        whileHover={{ scale: 1.008 }}
+        whileTap={{ scale: 0.99 }}
+        onClick={handleOpenAdd}
+        className="relative overflow-hidden rounded-2xl bg-[#1C1C1E] p-4 sm:p-5 border border-[#E5B842]/40 shadow-xl cursor-pointer transition flex items-center justify-between group"
+        id="inv-hero-add-card"
+      >
+        <div className="absolute -right-10 -top-10 w-28 h-28 rounded-full bg-[#E5B842]/10 blur-2xl pointer-events-none" />
+
+        <div className="flex items-center gap-3.5 relative z-10">
+          <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-[#E5B842]/15 border border-[#E5B842]/30 flex items-center justify-center text-[#ffd56d] group-hover:scale-105 transition shrink-0 shadow-md">
+            <Plus className="w-6 h-6 stroke-[3]" />
+          </div>
+          <div className="space-y-0.5">
+            <span className="block text-[10px] tracking-widest font-bold uppercase text-[#D4A017] font-sans">
+              CADASTRO DE PRODUTO
+            </span>
+            <h3 className="font-serif font-bold text-base sm:text-lg text-white group-hover:text-[#ffd56d] transition leading-tight">
+              Cadastrar Novo Item
+            </h3>
+            <p className="text-xs text-[#8E8E93] hidden sm:block">
+              Lançamento com foto em alta resolução, cálculo de lucro e SKU pelo cofre
+            </p>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            handleOpenAdd();
+          }}
+          className="relative z-10 px-4 py-2.5 rounded-xl bg-[#E5B842] group-hover:bg-[#ffd56d] text-[#121214] font-sans font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 shadow-md shrink-0 transition cursor-pointer"
+        >
+          <Plus className="w-4 h-4 stroke-[3]" />
+          <span>Cadastrar</span>
+        </button>
+      </motion.div>
 
       {/* 2. Interactive Search and Filters */}
       <div className="space-y-3" id="inv-controls">
@@ -592,310 +633,23 @@ export default function InventoryView({
         )}
       </div>
 
-      {/* 4. Overlay Modals: Add / Edit Form Modal */}
+      {/* 4. Overlay Modals: Add / Edit Form Modal (Matching 'novo-item.jpeg') */}
+      <NewItemModal
+        isOpen={isAddOpen || !!editingProd}
+        onClose={() => {
+          setIsAddOpen(false);
+          setEditingProd(null);
+        }}
+        onAddProduct={onAddProduct}
+        categories={categories}
+        suppliers={suppliers}
+        onAddCategory={onAddCategory}
+        onAddSupplier={onAddSupplier}
+        editingProduct={editingProd}
+        onEditProduct={onEditProduct}
+      />
+
       <AnimatePresence>
-        {(isAddOpen || editingProd) && (
-          <>
-            <div
-              className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs"
-              onClick={() => {
-                setIsAddOpen(false);
-                setEditingProd(null);
-              }}
-              id="inv-modal-backdrop"
-            />
-
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto pointer-events-none" id="inv-modal-wrapper">
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9, y: 15 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.9, y: 15 }}
-                className="w-full max-w-lg rounded-2xl border border-brand-tertiary bg-brand-secondary p-6 shadow-2xl pointer-events-auto"
-                id="inv-modal-box"
-              >
-                {/* Form Title */}
-                <div className="flex items-center justify-between border-b border-brand-tertiary pb-3 mb-4" id="inv-modal-title-row">
-                  <h3 className="font-serif font-bold text-lg text-brand-neutral" id="inv-modal-title-text">
-                    {editingProd ? 'Editar Produto' : 'Cadastrar Novo Item'}
-                  </h3>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsAddOpen(false);
-                      setEditingProd(null);
-                    }}
-                    className="text-gray-400 hover:text-white"
-                    id="inv-modal-close-btn"
-                  >
-                    ✕
-                  </button>
-                </div>
-
-                <form onSubmit={handleSaveProduct} className="space-y-4" id="inv-modal-form">
-                  <div className="grid grid-cols-2 gap-3" id="inv-modal-form-top">
-                    <div>
-                      <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-primary mb-1" id="inv-modal-lbl-name">
-                        Nome do Item *
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        placeholder="Ex: Rolex Submariner Date"
-                        className="w-full bg-brand-bg border border-brand-tertiary rounded-xl px-3 py-2 text-xs text-brand-neutral focus:outline-none focus:border-brand-primary"
-                        id="inv-modal-input-name"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-primary mb-1" id="inv-modal-lbl-sku">
-                        SKU (Código único) *
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={sku}
-                        onChange={(e) => setSku(e.target.value)}
-                        placeholder="Ex: RX-991-S"
-                        className="w-full bg-brand-bg border border-brand-tertiary rounded-xl px-3 py-2 text-xs font-mono text-brand-neutral focus:outline-none focus:border-brand-primary"
-                        id="inv-modal-input-sku"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3" id="inv-modal-form-middle">
-                    <div>
-                      <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-primary mb-1" id="inv-modal-lbl-cat">
-                        Categoria *
-                      </label>
-                      <div className="flex flex-col gap-1.5" id="inv-modal-cat-row">
-                        {isTypingNewCat ? (
-                          <div className="flex gap-2">
-                            <input
-                              type="text"
-                              value={newCustomCategoryName}
-                              onChange={(e) => setNewCustomCategoryName(e.target.value)}
-                              placeholder="Nova categoria..."
-                              className="flex-1 bg-brand-bg border border-brand-primary rounded-xl px-3 py-2 text-xs text-brand-neutral focus:outline-none"
-                              autoFocus
-                            />
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const trimmed = newCustomCategoryName.trim();
-                                if (trimmed) {
-                                  onAddCategory(trimmed);
-                                  handleCategoryChange(trimmed);
-                                  setNewCustomCategoryName('');
-                                  setIsTypingNewCat(false);
-                                }
-                              }}
-                              className="px-3 bg-brand-primary text-black rounded-xl text-xs font-bold transition"
-                            >
-                              OK
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setIsTypingNewCat(false);
-                                setNewCustomCategoryName('');
-                              }}
-                              className="px-3 bg-brand-tertiary text-gray-400 rounded-xl text-xs font-bold transition"
-                            >
-                              X
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="flex gap-2">
-                            <select
-                              value={category}
-                              onChange={(e) => handleCategoryChange(e.target.value)}
-                              className="flex-1 bg-brand-bg border border-brand-tertiary rounded-xl px-3 py-2 text-xs text-brand-neutral focus:outline-none focus:border-brand-primary"
-                              id="inv-modal-select-cat"
-                              required
-                            >
-                              {categories.map((cat, idx) => (
-                                <option key={`cat-opt-${cat}-${idx}`} value={cat}>
-                                  {cat}
-                                </option>
-                              ))}
-                              {categories.length === 0 && (
-                                <option value="">-- Crie uma categoria --</option>
-                              )}
-                            </select>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setIsTypingNewCat(true);
-                              }}
-                              className="px-2.5 bg-brand-primary/10 hover:bg-brand-primary/20 border border-brand-primary/25 text-brand-primary rounded-xl text-[10px] font-bold transition flex items-center justify-center cursor-pointer"
-                              title="Criar nova categoria instantaneamente"
-                              id="inv-modal-quick-add-cat"
-                            >
-                              + Nova
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-primary mb-1" id="inv-modal-lbl-supplier">
-                        Fornecedor *
-                      </label>
-                      <select
-                        value={supplier}
-                        onChange={(e) => setSupplier(e.target.value)}
-                        className="w-full bg-brand-bg border border-brand-tertiary rounded-xl px-3 py-2 text-xs text-brand-neutral focus:outline-none focus:border-brand-primary"
-                        id="inv-modal-select-supplier"
-                      >
-                        {suppliers.map((sup, idx) => (
-                          <option key={`sup-opt-${sup}-${idx}`} value={sup}>
-                            {sup}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5" id="inv-modal-form-numeric">
-                    <div>
-                      <label className="block text-[10px] font-bold uppercase tracking-wider text-amber-400 mb-1" id="inv-modal-lbl-cost">
-                        Valor Gasto (R$)
-                      </label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={costPrice === 0 ? '' : costPrice}
-                        onChange={(e) => setCostPrice(parseFloat(e.target.value) || 0)}
-                        placeholder="0.00"
-                        className="w-full bg-brand-bg border border-amber-500/40 rounded-xl px-2.5 py-2 text-xs text-brand-neutral focus:outline-none focus:border-amber-400 text-center"
-                        id="inv-modal-input-cost"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-primary mb-1" id="inv-modal-lbl-price">
-                        Preço Venda (R$) *
-                      </label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        required
-                        value={price === 0 ? '' : price}
-                        onChange={(e) => setPrice(parseFloat(e.target.value) || 0)}
-                        placeholder="0.00"
-                        className="w-full bg-brand-bg border border-brand-tertiary rounded-xl px-2.5 py-2 text-xs text-brand-neutral focus:outline-none focus:border-brand-primary text-center"
-                        id="inv-modal-input-price"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-primary mb-1" id="inv-modal-lbl-qty">
-                        Qtd Inicial
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        disabled={!!editingProd} // Stock additions should go through regular Entries
-                        value={quantity}
-                        onChange={(e) => setQuantity(parseInt(e.target.value) || 0)}
-                        className={`w-full bg-brand-bg border border-brand-tertiary rounded-xl px-2.5 py-2 text-xs text-brand-neutral focus:outline-none focus:border-brand-primary text-center ${editingProd ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        id="inv-modal-input-qty"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-primary mb-1" id="inv-modal-lbl-min">
-                        Estoque Mín *
-                      </label>
-                      <input
-                        type="number"
-                        min="1"
-                        required
-                        value={minStock}
-                        onChange={(e) => setMinStock(parseInt(e.target.value) || 0)}
-                        className="w-full bg-brand-bg border border-brand-tertiary rounded-xl px-2.5 py-2 text-xs text-brand-neutral focus:outline-none focus:border-brand-primary text-center"
-                        id="inv-modal-input-min"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-primary mb-1" id="inv-modal-lbl-url">
-                      Imagem do Produto (Arquivo / Link)
-                    </label>
-                    <div className="space-y-2">
-                      {/* Premium File Upload input */}
-                      <label className="flex items-center justify-center gap-2 px-3 py-2 border border-dashed border-brand-primary/40 rounded-xl bg-brand-primary/5 hover:bg-brand-primary/10 text-brand-primary text-xs font-bold cursor-pointer transition">
-                        <span>📁 Selecionar Foto da Galeria</span>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={handleFileChange}
-                          className="hidden"
-                        />
-                      </label>
-                      <input
-                        type="url"
-                        value={imageUrl}
-                        onChange={(e) => setImageUrl(e.target.value)}
-                        placeholder="Ou cole o link da imagem (Unsplash)..."
-                        className="w-full bg-brand-bg border border-brand-tertiary rounded-xl px-3 py-2 text-xs text-brand-neutral focus:outline-none focus:border-brand-primary"
-                        id="inv-modal-input-url"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-primary mb-1" id="inv-modal-lbl-desc">
-                      Descrição do Produto
-                    </label>
-                    <textarea
-                      rows={2}
-                      value={description}
-                      onChange={(e) => setDescription(e.target.value)}
-                      placeholder="Incorpore detalhes como materiais nobres, acabamentos e diferenciais..."
-                      className="w-full bg-brand-bg border border-brand-tertiary rounded-xl px-3 py-2 text-xs text-brand-neutral focus:outline-none focus:border-brand-primary"
-                      id="inv-modal-input-desc"
-                    />
-                  </div>
-
-                  {error && (
-                    <div className="flex items-center gap-2 text-xs text-brand-red bg-brand-red/10 p-3 rounded-xl border border-brand-red/15" id="inv-modal-error">
-                      <AlertCircle className="w-4 h-4" />
-                      <span>{error}</span>
-                    </div>
-                  )}
-
-                  <div className="flex gap-2 pt-2" id="inv-modal-buttons">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsAddOpen(false);
-                        setEditingProd(null);
-                      }}
-                      className="flex-1 py-2.5 rounded-xl border border-brand-tertiary text-gray-400 font-bold hover:text-white text-xs transition cursor-pointer"
-                      id="inv-modal-cancel"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      type="submit"
-                      className="flex-1 py-2.5 rounded-xl bg-brand-primary text-black font-bold text-xs hover:bg-brand-primary/90 transition cursor-pointer"
-                      id="inv-modal-save"
-                    >
-                      {editingProd ? 'Salvar Alterações' : 'Confirmar Cadastro'}
-                    </button>
-                  </div>
-                </form>
-              </motion.div>
-            </div>
-          </>
-        )}
 
         {isManageCatsOpen && (
           <>
