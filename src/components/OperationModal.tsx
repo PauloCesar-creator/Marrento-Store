@@ -23,7 +23,9 @@ interface OperationModalProps {
     productId: string,
     type: 'entrada' | 'saida',
     quantity: number,
-    price: number
+    price: number,
+    customProductOverride?: Product,
+    isSale?: boolean
   ) => void;
 }
 
@@ -102,7 +104,8 @@ export default function OperationModal({
       return;
     }
 
-    onConfirm(selectedProd.id, type, quantity, price);
+    // In rapid stock operation, 'saida' is an inventory withdrawal/adjustment, NOT a commercial sale
+    onConfirm(selectedProd.id, type, quantity, price, undefined, type === 'saida' ? false : true);
     onClose();
     setQuantity(1);
     setError('');

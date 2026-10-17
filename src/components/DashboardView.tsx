@@ -43,9 +43,13 @@ export default function DashboardView({
   const [isAddingCategory, setIsAddingCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
 
-  // Calculate total units sold (sum of quantity for all 'saida' transactions)
+  // Format BRL currency
+  const formatCurrency = (val: number) =>
+    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+
+  // Calculate total units sold (only commercial sales, ignoring withdrawals/stock deductions)
   const totalUnitsSold = transactions
-    .filter((t) => t.type === 'saida')
+    .filter((t) => t.type === 'saida' && t.isSale !== false)
     .reduce((acc, t) => acc + t.quantity, 0);
 
   // Calculate total units entered (sum of quantity for all 'entrada' transactions)
@@ -53,11 +57,32 @@ export default function DashboardView({
     .filter((t) => t.type === 'entrada')
     .reduce((acc, t) => acc + t.quantity, 0);
 
-  // Calculate total current stock items count
-  const totalItemsInStock = products.reduce((acc, p) => acc + p.quantity, 0);
+  // Calculate total current stock items count (accounting for variations if present)
+  const totalItemsInStock = products.reduce((acc, p) => {
+    const qty = p.variants && p.variants.length > 0
+      ? p.variants.reduce((sum, v) => sum + (Number(v.quantity) || 0), 0)
+      : (Number(p.quantity) || 0);
+    return acc + qty;
+  }, 0);
+
+  // Calculate total invested value (costPrice * quantity) of all registered products & variations
+  const valorTotalInvestido = products.reduce((acc, p) => {
+    const qty = p.variants && p.variants.length > 0
+      ? p.variants.reduce((sum, v) => sum + (Number(v.quantity) || 0), 0)
+      : (Number(p.quantity) || 0);
+    const unitCost = p.costPrice !== undefined && p.costPrice !== null && Number(p.costPrice) > 0
+      ? Number(p.costPrice)
+      : (Number(p.price) || 0);
+    return acc + unitCost * qty;
+  }, 0);
 
   // Count items below minimum stock
-  const lowStockCount = products.filter((p) => p.quantity <= p.minStock).length;
+  const lowStockCount = products.filter((p) => {
+    const qty = p.variants && p.variants.length > 0
+      ? p.variants.reduce((sum, v) => sum + (Number(v.quantity) || 0), 0)
+      : (Number(p.quantity) || 0);
+    return qty <= p.minStock;
+  }).length;
 
   // Dynamic category styling helper
   const getCategoryMeta = (catName: string) => {
@@ -162,8 +187,8 @@ export default function DashboardView({
         </div>
       </motion.div>
 
-      {/* 3. Stats Row (Total em Estoque & Baixo Estoque) */}
-      <div className="grid grid-cols-2 gap-3.5" id="dash-stats-grid">
+      {/* 3. Stats Row (Total em Estoque, Valor Investido & Baixo Estoque) */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5" id="dash-stats-grid">
         {/* Total em Estoque Card */}
         <motion.div
           initial={{ opacity: 0, x: -15 }}
@@ -189,11 +214,36 @@ export default function DashboardView({
           </span>
         </motion.div>
 
+        {/* Valor Total Investido Card */}
+        <motion.div
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.08 }}
+          onClick={() => onNavigateToTab('Relatórios')}
+          className="group rounded-2xl bg-brand-secondary p-4 border border-amber-500/30 bg-amber-950/10 hover:border-amber-400/50 cursor-pointer transition-all duration-200"
+          id="dash-invested-total-card"
+        >
+          <div className="flex items-center gap-2 mb-2" id="dash-invested-total-header">
+            <div className="p-2 rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/30 group-hover:scale-105 transition" id="dash-invested-total-icon-box">
+              <DollarSign className="w-4 h-4 text-amber-400" />
+            </div>
+            <span className="text-[10px] font-bold text-amber-400/90 uppercase tracking-wider" id="dash-invested-total-lbl">
+              VALOR INVESTIDO
+            </span>
+          </div>
+          <span className="block font-serif text-xl sm:text-2xl text-amber-300 font-semibold truncate" id="dash-invested-total-val">
+            {formatCurrency(valorTotalInvestido)}
+          </span>
+          <span className="text-[10px] text-amber-400/70 font-medium mt-1 inline-flex items-center gap-0.5" id="dash-invested-total-hint">
+            Custo total em estoque <ChevronRight className="w-3 h-3" />
+          </span>
+        </motion.div>
+
         {/* Low Stock Card */}
         <motion.div
           initial={{ opacity: 0, x: 15 }}
           animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.3, delay: 0.05 }}
+          transition={{ duration: 0.3, delay: 0.1 }}
           onClick={() => onNavigateToTab('Estoque')}
           className="group rounded-2xl bg-brand-secondary p-4 border border-brand-tertiary/50 hover:border-brand-red/30 cursor-pointer transition-all duration-200"
           id="dash-lowstock-card"
@@ -399,31 +449,10 @@ export default function DashboardView({
             <div className="col-span-full text-center py-8 text-gray-500 bg-brand-secondary/30 rounded-xl border border-dashed border-brand-tertiary/50" id="dash-activity-empty">
               <Package className="w-8 h-8 text-brand-tertiary mx-auto mb-2" id="dash-activity-empty-icon" />
               <p className="text-xs font-medium" id="dash-activity-empty-text">Nenhuma movimentação registrada ainda.</p>
-              <p className="text-[10px] text-gray-500 mt-0.5" id="dash-activity-empty-hint">Use o botão + para realizar entradas e saídas de estoque.</p>
+              <p className="text-[10px] text-gray-500 mt-0.5" id="dash-activity-empty-hint">Use o botão dourado $ para abrir o Painel de Venda (PDV Express).</p>
             </div>
           )}
         </div>
-      </div>
-
-      {/* Floating Action Button (FAB): Painel de Venda ($) */}
-      <div className="fixed bottom-20 right-4 z-30" id="dash-fab-wrapper">
-        <motion.button
-          whileHover={{ scale: 1.08 }}
-          whileTap={{ scale: 0.94 }}
-          onClick={() => {
-            if (onOpenSalesPanel) {
-              onOpenSalesPanel();
-            } else {
-              onOpenQuickOp();
-            }
-          }}
-          className="flex items-center justify-center w-14 h-14 rounded-full bg-gradient-to-tr from-[#D4A017] via-[#F3E5AB] to-[#C59B27] text-black shadow-[0_0_25px_rgba(212,160,23,0.5)] border border-[#ffd56d]/60 transition cursor-pointer relative group"
-          title="Painel de Venda (PDV Express)"
-          id="dash-fab"
-        >
-          <DollarSign className="w-7 h-7 stroke-[2.8]" />
-          <span className="sr-only">Painel de Venda</span>
-        </motion.button>
       </div>
 
     </div>

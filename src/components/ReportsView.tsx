@@ -137,10 +137,15 @@ export default function ReportsView({
   const qtdSaidasPeriodo = periodSalesTxs.reduce((acc, t) => acc + t.quantity, 0);
   const qtdEntradasPeriodo = periodEntriesTxs.reduce((acc, t) => acc + t.quantity, 0);
 
-  // Total Invested Value in Store Inventory
+  // Total Invested Value in Store Inventory (accounting for all registered products and variations)
   const valorTotalInvestido = products.reduce((acc, p) => {
-    const unitCost = p.costPrice && p.costPrice > 0 ? p.costPrice : p.price;
-    return acc + unitCost * p.quantity;
+    const qty = p.variants && p.variants.length > 0
+      ? p.variants.reduce((sum, v) => sum + (Number(v.quantity) || 0), 0)
+      : (Number(p.quantity) || 0);
+    const unitCost = p.costPrice !== undefined && p.costPrice !== null && Number(p.costPrice) > 0
+      ? Number(p.costPrice)
+      : (Number(p.price) || 0);
+    return acc + unitCost * qty;
   }, 0);
 
   // Estimated Gross Profit
@@ -155,11 +160,26 @@ export default function ReportsView({
   const balançoUnidades = qtdEntradasPeriodo - qtdSaidasPeriodo;
 
   // Low Stock Items
-  const lowStockProducts = products.filter((p) => p.quantity <= p.minStock);
+  const lowStockProducts = products.filter((p) => {
+    const qty = p.variants && p.variants.length > 0
+      ? p.variants.reduce((sum, v) => sum + (Number(v.quantity) || 0), 0)
+      : (Number(p.quantity) || 0);
+    return qty <= p.minStock;
+  });
 
   // Stock Totals
-  const grandTotalValue = products.reduce((acc, p) => acc + p.price * p.quantity, 0);
-  const grandTotalQuantity = products.reduce((acc, p) => acc + p.quantity, 0);
+  const grandTotalValue = products.reduce((acc, p) => {
+    const qty = p.variants && p.variants.length > 0
+      ? p.variants.reduce((sum, v) => sum + (Number(v.quantity) || 0), 0)
+      : (Number(p.quantity) || 0);
+    return acc + (Number(p.price) || 0) * qty;
+  }, 0);
+  const grandTotalQuantity = products.reduce((acc, p) => {
+    const qty = p.variants && p.variants.length > 0
+      ? p.variants.reduce((sum, v) => sum + (Number(v.quantity) || 0), 0)
+      : (Number(p.quantity) || 0);
+    return acc + qty;
+  }, 0);
 
   // Category summary for current stock
   const categoryInventory = products.reduce((acc: Record<string, { totalValue: number; totalQuantity: number }>, product) => {
@@ -167,8 +187,11 @@ export default function ReportsView({
     if (!acc[cat]) {
       acc[cat] = { totalValue: 0, totalQuantity: 0 };
     }
-    acc[cat].totalValue += product.price * product.quantity;
-    acc[cat].totalQuantity += product.quantity;
+    const qty = product.variants && product.variants.length > 0
+      ? product.variants.reduce((sum, v) => sum + (Number(v.quantity) || 0), 0)
+      : (Number(product.quantity) || 0);
+    acc[cat].totalValue += (Number(product.price) || 0) * qty;
+    acc[cat].totalQuantity += qty;
     return acc;
   }, {});
 

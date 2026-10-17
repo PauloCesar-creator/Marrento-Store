@@ -12,7 +12,8 @@ import {
   Receipt,
   User,
   UserCheck,
-  Lock
+  Lock,
+  DollarSign
 } from 'lucide-react';
 
 import { Product, Transaction, Notification, CategoryName, ProductVariant, MonthlyClosing } from './types';
@@ -1072,6 +1073,21 @@ export default function App() {
 
         </nav>
       </footer>
+
+      {/* Floating Action Button (FAB): Luxury Golden Sifrão ($) -> Opens Painel de Venda (PDV Express) */}
+      <div className="fixed bottom-20 right-4 z-30" id="global-sales-fab-wrapper">
+        <motion.button
+          whileHover={{ scale: 1.08 }}
+          whileTap={{ scale: 0.94 }}
+          onClick={() => handleOpenSalesPanel()}
+          className="flex items-center justify-center w-14 h-14 rounded-full bg-gradient-to-tr from-[#D4A017] via-[#F3E5AB] to-[#C59B27] text-black shadow-[0_0_25px_rgba(212,160,23,0.5)] border border-[#ffd56d]/60 transition cursor-pointer relative group"
+          title="Painel de Venda (PDV Express)"
+          id="global-sales-fab"
+        >
+          <DollarSign className="w-7 h-7 stroke-[2.8]" />
+          <span className="sr-only">Painel de Venda</span>
+        </motion.button>
+      </div>
 
       {/* Sales Panel (PDV Express) Modal */}
       <SalesPanelModal
