@@ -13,7 +13,8 @@ interface QuickStockModalProps {
     type: 'entrada' | 'saida',
     quantity: number,
     price: number,
-    updatedProductOverride?: Product
+    updatedProductOverride?: Product,
+    isSale?: boolean
   ) => void;
   onOpenEdit?: (product: Product) => void;
   onOpenDetails?: (product: Product) => void;
@@ -61,15 +62,23 @@ export default function QuickStockModal({
     };
 
     if (onRecordTransaction && actualDelta > 0) {
-      onRecordTransaction(product.id, type, actualDelta, product.price, updatedProduct);
+      // type === 'saida' is an inventory withdrawal/adjustment, NOT a commercial sale (isSale: false)
+      onRecordTransaction(
+        product.id,
+        type,
+        actualDelta,
+        product.price,
+        updatedProduct,
+        type === 'saida' ? false : true
+      );
     } else {
       onUpdateProduct(updatedProduct);
     }
 
     showFeedback(
       type === 'entrada'
-        ? `+${actualDelta} unidade(s) adicionada(s)!`
-        : `-${actualDelta} unidade(s) registrada(s)!`,
+        ? `+${actualDelta} unidade(s) adicionada(s) ao estoque!`
+        : `-${actualDelta} unidade(s) retirada(s) do estoque!`,
       type === 'entrada' ? 'green' : 'red'
     );
   };
@@ -97,15 +106,23 @@ export default function QuickStockModal({
     };
 
     if (onRecordTransaction) {
-      onRecordTransaction(product.id, type, stepQty, product.price, updatedProduct);
+      // type === 'saida' is an inventory withdrawal/adjustment, NOT a commercial sale (isSale: false)
+      onRecordTransaction(
+        product.id,
+        type,
+        stepQty,
+        product.price,
+        updatedProduct,
+        type === 'saida' ? false : true
+      );
     } else {
       onUpdateProduct(updatedProduct);
     }
 
     showFeedback(
       type === 'entrada'
-        ? `+${stepQty} un em "${targetVariantName}"!`
-        : `-${stepQty} un em "${targetVariantName}"!`,
+        ? `+${stepQty} un adicionada(s) em "${targetVariantName}"!`
+        : `-${stepQty} un retirada(s) de "${targetVariantName}"!`,
       type === 'entrada' ? 'green' : 'red'
     );
   };
@@ -242,7 +259,7 @@ export default function QuickStockModal({
                       -{stepQty} UN
                     </span>
                     <span className="text-[11px] text-rose-300/80 font-sans mt-0.5">
-                      Saída / Venda
+                      Retirar do Estoque
                     </span>
                   </button>
 

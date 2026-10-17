@@ -103,18 +103,18 @@ export default function ReportsView({
   const sevenDaysAgo = startOfToday - 6 * 24 * 60 * 60 * 1000;
   const thirtyDaysAgo = startOfToday - 29 * 24 * 60 * 60 * 1000;
 
-  // 1. TODAY'S SALES VALUE
+  // 1. TODAY'S SALES VALUE (Only commercial sales, not inventory withdrawals/adjustments)
   const todayTransactions = transactions.filter((t) => {
     const txTime = parseTxDate(t).getTime();
     return txTime >= startOfToday && txTime <= endOfToday;
   });
 
   const valorVendidoHoje = todayTransactions
-    .filter((t) => t.type === 'saida')
+    .filter((t) => t.type === 'saida' && t.isSale !== false)
     .reduce((acc, t) => acc + t.price * t.quantity, 0);
 
   const qtdVendidaHoje = todayTransactions
-    .filter((t) => t.type === 'saida')
+    .filter((t) => t.type === 'saida' && t.isSale !== false)
     .reduce((acc, t) => acc + t.quantity, 0);
 
   // 2. FILTERED TRANSACTIONS BASED ON SELECTED RANGE
@@ -130,7 +130,7 @@ export default function ReportsView({
   });
 
   // Period Metrics Calculations
-  const periodSalesTxs = filteredTransactions.filter((t) => t.type === 'saida');
+  const periodSalesTxs = filteredTransactions.filter((t) => t.type === 'saida' && t.isSale !== false);
   const periodEntriesTxs = filteredTransactions.filter((t) => t.type === 'entrada');
 
   const faturamentoPeriodo = periodSalesTxs.reduce((acc, t) => acc + t.price * t.quantity, 0);
@@ -230,7 +230,7 @@ export default function ReportsView({
     if (p.salesCount > 0) allTimeProductSales.set(p.id, p.salesCount);
   });
   transactions
-    .filter((t) => t.type === 'saida')
+    .filter((t) => t.type === 'saida' && t.isSale !== false)
     .forEach((tx) => {
       const p = products.find((prod) => prod.id === tx.productId || prod.sku === tx.sku);
       const key = p ? p.id : tx.productId || tx.sku;
@@ -300,7 +300,7 @@ export default function ReportsView({
     ];
     const periodRef = `${monthNames[now.getMonth()]} / ${now.getFullYear()}`;
 
-    const salesTxs = transactions.filter((t) => t.type === 'saida');
+    const salesTxs = transactions.filter((t) => t.type === 'saida' && t.isSale !== false);
     const entriesTxs = transactions.filter((t) => t.type === 'entrada');
 
     const totalRevenue = salesTxs.reduce((acc, t) => acc + t.price * t.quantity, 0);
@@ -999,26 +999,41 @@ Fim do Relatório - Marento Store Luxury Control
                   <span
                     className={`px-2 py-0.5 rounded-lg text-[9px] font-bold uppercase shrink-0 ${
                       tx.type === 'saida'
-                        ? 'bg-rose-950/60 text-rose-300 border border-rose-500/40'
+                        ? tx.isSale === false
+                          ? 'bg-amber-950/60 text-amber-300 border border-amber-500/40'
+                          : 'bg-rose-950/60 text-rose-300 border border-rose-500/40'
                         : 'bg-emerald-950/60 text-emerald-300 border border-emerald-500/40'
                     }`}
                   >
-                    {tx.type === 'saida' ? 'Saída' : 'Entrada'}
+                    {tx.type === 'saida'
+                      ? tx.isSale === false
+                        ? 'Retirada'
+                        : 'Venda'
+                      : 'Entrada'}
                   </span>
                   <div className="min-w-0">
                     <span className="font-bold text-brand-neutral block truncate">{tx.productName}</span>
                     <span className="text-[9px] text-gray-500 font-mono">
                       {tx.date} às {tx.time} • SKU: {tx.sku}
+                      {tx.paymentMethod && ` • ${tx.paymentMethod}`}
                     </span>
                   </div>
                 </div>
 
                 <div className="text-right shrink-0 font-mono">
-                  <span className={`font-bold block ${tx.type === 'saida' ? 'text-rose-400' : 'text-emerald-400'}`}>
+                  <span className={`font-bold block ${
+                    tx.type === 'saida'
+                      ? tx.isSale === false ? 'text-amber-400' : 'text-rose-400'
+                      : 'text-emerald-400'
+                  }`}>
                     {tx.type === 'saida' ? '-' : '+'}{tx.quantity} un
                   </span>
                   <span className="text-[9px] text-gray-400 block">
-                    {formatCurrency(tx.price * tx.quantity)}
+                    {tx.isSale === false ? (
+                      <span className="text-gray-500 italic">Ajuste Estoque</span>
+                    ) : (
+                      formatCurrency(tx.price * tx.quantity)
+                    )}
                   </span>
                 </div>
               </div>

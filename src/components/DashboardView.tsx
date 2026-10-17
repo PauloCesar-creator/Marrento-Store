@@ -11,6 +11,7 @@ import {
   Gem,
   Wind,
   Plus,
+  DollarSign,
   Package,
   Award,
   Layers,
@@ -25,6 +26,7 @@ interface DashboardViewProps {
   onSelectCategory: (category: CategoryName | 'Todos') => void;
   onNavigateToTab: (tab: string) => void;
   onOpenQuickOp: (productId?: string, type?: 'entrada' | 'saida') => void;
+  onOpenSalesPanel?: (productId?: string) => void;
   onAddCategory: (name: string) => void;
 }
 
@@ -35,6 +37,7 @@ export default function DashboardView({
   onSelectCategory,
   onNavigateToTab,
   onOpenQuickOp,
+  onOpenSalesPanel,
   onAddCategory,
 }: DashboardViewProps) {
   const [isAddingCategory, setIsAddingCategory] = useState(false);
@@ -402,17 +405,24 @@ export default function DashboardView({
         </div>
       </div>
 
-      {/* Floating Action Button (FAB) */}
+      {/* Floating Action Button (FAB): Painel de Venda ($) */}
       <div className="fixed bottom-20 right-4 z-30" id="dash-fab-wrapper">
         <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={() => onOpenQuickOp()}
-          className="flex items-center justify-center w-14 h-14 rounded-full bg-brand-primary text-black shadow-2xl hover:bg-brand-primary/90 transition cursor-pointer"
-          title="Nova Operação Rápida"
+          whileHover={{ scale: 1.08 }}
+          whileTap={{ scale: 0.94 }}
+          onClick={() => {
+            if (onOpenSalesPanel) {
+              onOpenSalesPanel();
+            } else {
+              onOpenQuickOp();
+            }
+          }}
+          className="flex items-center justify-center w-14 h-14 rounded-full bg-gradient-to-tr from-[#D4A017] via-[#F3E5AB] to-[#C59B27] text-black shadow-[0_0_25px_rgba(212,160,23,0.5)] border border-[#ffd56d]/60 transition cursor-pointer relative group"
+          title="Painel de Venda (PDV Express)"
           id="dash-fab"
         >
-          <Plus className="w-6 h-6 stroke-[3]" />
+          <DollarSign className="w-7 h-7 stroke-[2.8]" />
+          <span className="sr-only">Painel de Venda</span>
         </motion.button>
       </div>
 

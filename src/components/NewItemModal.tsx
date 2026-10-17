@@ -59,34 +59,47 @@ export default function NewItemModal({
     return `SK-${randomNum}-${catCode}`;
   };
 
+  // Track previous open state and editing product to prevent auto-wiping active inputs
+  const prevIsOpenRef = React.useRef(false);
+  const prevEditingIdRef = React.useRef<string | undefined>(undefined);
+
   useEffect(() => {
-    if (editingProduct) {
-      setName(editingProduct.name);
-      setSku(editingProduct.sku);
-      setCategory(editingProduct.category);
-      setSupplier(editingProduct.supplier);
-      setCostPrice(editingProduct.costPrice || 0);
-      setPrice(editingProduct.price || 0);
-      setQuantity(editingProduct.quantity || 0);
-      setMinStock(editingProduct.minStock || 5);
-      setImageUrl(editingProduct.imageUrl || '');
-      setDescription(editingProduct.description || '');
-      setError('');
-    } else {
-      setName('');
-      const defaultCat = categories[0] || 'Relógios';
-      setCategory(defaultCat);
-      setSupplier(suppliers[0] || 'Paris Fragrances Group');
-      setSku(generateSku(defaultCat));
-      setCostPrice(0);
-      setPrice(0);
-      setQuantity(1);
-      setMinStock(5);
-      setImageUrl('');
-      setDescription('');
-      setError('');
+    // Only initialize or reset form when modal transitions to open, or when editing target changes
+    const justOpened = isOpen && !prevIsOpenRef.current;
+    const editingChanged = editingProduct?.id !== prevEditingIdRef.current;
+
+    if (isOpen && (justOpened || editingChanged)) {
+      if (editingProduct) {
+        setName(editingProduct.name);
+        setSku(editingProduct.sku);
+        setCategory(editingProduct.category);
+        setSupplier(editingProduct.supplier);
+        setCostPrice(editingProduct.costPrice || 0);
+        setPrice(editingProduct.price || 0);
+        setQuantity(editingProduct.quantity || 0);
+        setMinStock(editingProduct.minStock || 5);
+        setImageUrl(editingProduct.imageUrl || '');
+        setDescription(editingProduct.description || '');
+        setError('');
+      } else {
+        setName('');
+        const defaultCat = categories[0] || 'Relógios';
+        setCategory(defaultCat);
+        setSupplier(suppliers[0] || 'Paris Fragrances Group');
+        setSku(generateSku(defaultCat));
+        setCostPrice(0);
+        setPrice(0);
+        setQuantity(1);
+        setMinStock(5);
+        setImageUrl('');
+        setDescription('');
+        setError('');
+      }
     }
-  }, [editingProduct, isOpen, categories, suppliers]);
+
+    prevIsOpenRef.current = isOpen;
+    prevEditingIdRef.current = editingProduct?.id;
+  }, [isOpen, editingProduct]);
 
   if (!isOpen) return null;
 

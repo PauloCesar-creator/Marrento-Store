@@ -37,12 +37,15 @@ export interface Transaction {
   productName: string;
   sku: string;
   category: CategoryName;
-  type: 'entrada' | 'saida'; // 'entrada' (restock) or 'saida' (sale/outflow)
+  type: 'entrada' | 'saida'; // 'entrada' (restock) or 'saida' (outflow/sale/adjustment)
   quantity: number;
   price: number; // Unit value at the time
   date: string; // YYYY-MM-DD
   time: string; // HH:MM
   timestamp: number; // Epoch for sorting
+  isSale?: boolean; // true for commercial sales; false for inventory withdrawals/deductions
+  reason?: string; // e.g. "Venda", "Ajuste de Estoque", "Retirada", "Defeito"
+  paymentMethod?: string; // e.g. "PIX", "Cartão de Crédito", "Dinheiro"
 }
 
 export interface Supplier {

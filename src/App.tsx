@@ -29,6 +29,7 @@ import PrintTagModal from './components/PrintTagModal';
 import PrintReceiptModal from './components/PrintReceiptModal';
 import NfceModal from './components/NfceModal';
 import LoginModal from './components/LoginModal';
+import SalesPanelModal from './components/SalesPanelModal';
 import marrentoLogo from '../assets/img/marrento store logo.jpg';
 import { useBarcodeScanner } from './utils/useBarcodeScanner';
 import { generateUUID } from './utils/uuid';
@@ -113,10 +114,12 @@ export default function App() {
     }
   };
 
-  // 3. Quick Operation Modal States
+  // 3. Quick Operation & Sales Panel Modal States
   const [isQuickOpOpen, setIsQuickOpOpen] = useState(false);
   const [quickOpProductId, setQuickOpProductId] = useState<string | undefined>(undefined);
   const [quickOpType, setQuickOpType] = useState<'entrada' | 'saida'>('entrada');
+  const [isSalesPanelOpen, setIsSalesPanelOpen] = useState(false);
+  const [salesPanelProductId, setSalesPanelProductId] = useState<string | undefined>(undefined);
 
   // 4. Barcode Scanner, Printer & NFC-e Modals States
   const [isScannerOpen, setIsScannerOpen] = useState(false);
@@ -351,7 +354,10 @@ export default function App() {
 
         // 1. Categories sync
         if (remoteCats.length > 0) {
-          setCategories(remoteCats);
+          setCategories((prev) => {
+            if (prev.length === remoteCats.length && prev.every((v, i) => v === remoteCats[i])) return prev;
+            return remoteCats;
+          });
         } else {
           // If remote is empty, seed from local
           setCategories((prev) => {
@@ -362,7 +368,10 @@ export default function App() {
 
         // 2. Suppliers sync
         if (remoteSups.length > 0) {
-          setSuppliers(remoteSups);
+          setSuppliers((prev) => {
+            if (prev.length === remoteSups.length && prev.every((v, i) => v === remoteSups[i])) return prev;
+            return remoteSups;
+          });
         } else {
           // If remote is empty, seed from local
           setSuppliers((prev) => {
@@ -373,7 +382,15 @@ export default function App() {
 
         // 3. Products sync (Supabase as source of truth)
         if (remoteProds.length > 0) {
-          setProducts(remoteProds);
+          setProducts((prev) => {
+            if (
+              prev.length === remoteProds.length &&
+              prev.every((p, i) => p.id === remoteProds[i].id && p.quantity === remoteProds[i].quantity && p.price === remoteProds[i].price && p.name === remoteProds[i].name)
+            ) {
+              return prev;
+            }
+            return remoteProds;
+          });
         } else {
           // If remote is empty, seed initial products to Supabase
           setProducts((prev) => {
@@ -386,7 +403,12 @@ export default function App() {
 
         // 4. Transactions sync (Supabase as source of truth)
         if (remoteTxs.length > 0) {
-          setTransactions(remoteTxs);
+          setTransactions((prev) => {
+            if (prev.length === remoteTxs.length && prev[0]?.id === remoteTxs[0]?.id) {
+              return prev;
+            }
+            return remoteTxs;
+          });
         } else {
           // If remote is empty, seed local transactions to Supabase
           setTransactions((prev) => {
@@ -399,7 +421,12 @@ export default function App() {
 
         // 5. Monthly Closings sync
         if (remoteClosings.length > 0) {
-          setMonthlyClosings(remoteClosings);
+          setMonthlyClosings((prev) => {
+            if (prev.length === remoteClosings.length && prev[0]?.id === remoteClosings[0]?.id) {
+              return prev;
+            }
+            return remoteClosings;
+          });
         } else {
           setMonthlyClosings((prev) => {
             if (prev.length > 0) {
@@ -475,10 +502,10 @@ export default function App() {
       console.warn('[Supabase Realtime Channel Warning]:', err);
     }
 
-    // Secondary active sync polling every 4s for absolute cross-device parity
+    // Secondary active sync polling every 10s for absolute cross-device parity
     const pollInterval = setInterval(() => {
       loadFromSupabase();
-    }, 4000);
+    }, 10000);
 
     return () => {
       isMounted = false;
@@ -668,27 +695,34 @@ export default function App() {
     type: 'entrada' | 'saida',
     qty: number,
     price: number,
-    customProductOverride?: Product
-  ) => {
+    customProductOverride?: Product,
+    isSale: boolean = true,
+    details?: { reason?: string; paymentMethod?: string; customerName?: string }
+  ): Promise<{ success: boolean; transaction?: Transaction }> => {
     const baseProd = customProductOverride || products.find((p) => p.id === productId);
-    if (!baseProd) return;
+    if (!baseProd) return { success: false };
 
     // Check availability if outflow
     if (type === 'saida' && !customProductOverride && baseProd.quantity < qty) {
       alert(`Quantidade insuficiente! Apenas ${baseProd.quantity} unidades disponíveis.`);
-      return;
+      return { success: false };
     }
 
     let updatedProduct: Product;
     if (customProductOverride) {
-      const updatedSales = type === 'saida' ? (customProductOverride.salesCount || 0) + qty : (customProductOverride.salesCount || 0);
+      // If isSale is false (stock deduction/withdrawal from Estoque page), salesCount does NOT increment!
+      const updatedSales = (type === 'saida' && isSale)
+        ? (customProductOverride.salesCount || 0) + qty
+        : (customProductOverride.salesCount || 0);
       updatedProduct = {
         ...customProductOverride,
         salesCount: updatedSales
       };
     } else {
       const updatedQty = type === 'entrada' ? baseProd.quantity + qty : Math.max(0, baseProd.quantity - qty);
-      const updatedSales = type === 'saida' ? (baseProd.salesCount || 0) + qty : (baseProd.salesCount || 0);
+      const updatedSales = (type === 'saida' && isSale)
+        ? (baseProd.salesCount || 0) + qty
+        : (baseProd.salesCount || 0);
       updatedProduct = {
         ...baseProd,
         quantity: updatedQty,
@@ -718,6 +752,9 @@ export default function App() {
       date: new Date().toISOString().split('T')[0],
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       timestamp: Date.now(),
+      isSale,
+      reason: details?.reason || (type === 'entrada' ? 'Entrada (Reposição)' : isSale ? 'Venda' : 'Retirada de Estoque'),
+      paymentMethod: details?.paymentMethod,
     };
 
     setTransactions((prev) => [tx, ...prev]);
@@ -729,6 +766,8 @@ export default function App() {
       const err = prodRes?.error || txRes?.error;
       console.warn('[Supabase Transaction Sync Warning]:', err);
     }
+
+    return { success: true, transaction: tx };
   };
 
   // Open transaction wizard modal
@@ -736,6 +775,40 @@ export default function App() {
     setQuickOpProductId(productId);
     setQuickOpType(type || 'entrada');
     setIsQuickOpOpen(true);
+  };
+
+  // Open Sales Panel (PDV Express)
+  const handleOpenSalesPanel = (productId?: string) => {
+    setSalesPanelProductId(productId);
+    setIsSalesPanelOpen(true);
+  };
+
+  // Process completed sale from Sales Panel
+  const handleConfirmSale = async (
+    productId: string,
+    quantity: number,
+    price: number,
+    details: {
+      variantId?: string;
+      variantName?: string;
+      paymentMethod: string;
+      customerName?: string;
+      customProductOverride?: Product;
+    }
+  ) => {
+    return await handleRecordTransaction(
+      productId,
+      'saida',
+      quantity,
+      price,
+      details.customProductOverride,
+      true, // isSale: true
+      {
+        reason: 'Venda',
+        paymentMethod: details.paymentMethod,
+        customerName: details.customerName,
+      }
+    );
   };
 
   // Active unread warnings count
@@ -869,6 +942,7 @@ export default function App() {
                 onSelectCategory={setSelectedCategory}
                 onNavigateToTab={(tab) => handleTabClick(tab as any)}
                 onOpenQuickOp={handleOpenQuickOp}
+                onOpenSalesPanel={handleOpenSalesPanel}
                 onAddCategory={handleAddCategory}
               />
             )}
@@ -998,6 +1072,25 @@ export default function App() {
 
         </nav>
       </footer>
+
+      {/* Sales Panel (PDV Express) Modal */}
+      <SalesPanelModal
+        isOpen={isSalesPanelOpen}
+        onClose={() => setIsSalesPanelOpen(false)}
+        products={products}
+        initialProductId={salesPanelProductId}
+        onConfirmSale={handleConfirmSale}
+        onOpenPrintReceipt={(tx) => {
+          setPrintReceiptTx(tx);
+          setIsPrintReceiptOpen(true);
+        }}
+        onOpenNfce={(prod, variant) => {
+          setNfceProduct(prod);
+          setNfceVariant(variant || null);
+          setIsNfceOpen(true);
+        }}
+        onOpenBarcodeScanner={() => setIsScannerOpen(true)}
+      />
 
       {/* 4. Global Action Dialog: Stock Operations */}
       <OperationModal
