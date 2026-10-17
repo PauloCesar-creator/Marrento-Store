@@ -1,9 +1,9 @@
 import { supabase } from './supabase';
-import { Product, ProductVariant, Transaction } from '../types';
+import { Product, ProductVariant, Transaction, MonthlyClosing } from '../types';
 
 /**
  * DATABASE SERVICE FOR SUPABASE SYNCHRONIZATION
- * Persists and fetches products, categories, suppliers, and transactions.
+ * Persists and fetches products, categories, suppliers, transactions and monthly closings.
  */
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -15,10 +15,10 @@ export async function dbFetchCategories(): Promise<string[]> {
   try {
     const { data, error } = await supabase.from('categories').select('name');
     if (error) {
-      console.warn('Supabase categories fetch info:', error.message);
+      console.warn('Supabase categories fetch warning:', error.message);
       return [];
     }
-    return data ? data.map((item) => item.name) : [];
+    return data ? data.map((item) => item.name).filter(Boolean) : [];
   } catch (err) {
     console.error('Failed to fetch categories from Supabase:', err);
     return [];
@@ -30,7 +30,6 @@ export async function dbAddCategory(name: string): Promise<{ success: boolean; e
     const cleanName = name.trim();
     if (!cleanName) return { success: false, error: 'Nome inválido' };
 
-    // 1. Check if already exists in Supabase
     const { data: existing } = await supabase
       .from('categories')
       .select('id')
@@ -41,7 +40,6 @@ export async function dbAddCategory(name: string): Promise<{ success: boolean; e
       return { success: true };
     }
 
-    // 2. Try simple insert
     const { error: insertErr } = await supabase
       .from('categories')
       .insert([{ name: cleanName }]);
@@ -50,7 +48,6 @@ export async function dbAddCategory(name: string): Promise<{ success: boolean; e
       return { success: true };
     }
 
-    // 3. Fallback upsert
     const { error: upsertErr } = await supabase
       .from('categories')
       .upsert([{ name: cleanName }], { onConflict: 'name' });
@@ -87,10 +84,10 @@ export async function dbFetchSuppliers(): Promise<string[]> {
   try {
     const { data, error } = await supabase.from('suppliers').select('name');
     if (error) {
-      console.warn('Supabase suppliers fetch info:', error.message);
+      console.warn('Supabase suppliers fetch warning:', error.message);
       return [];
     }
-    return data ? data.map((item) => item.name) : [];
+    return data ? data.map((item) => item.name).filter(Boolean) : [];
   } catch (err) {
     console.error('Failed to fetch suppliers from Supabase:', err);
     return [];
@@ -154,15 +151,15 @@ export async function dbDeleteSupplier(name: string): Promise<boolean> {
 // ==========================================
 export async function dbFetchProducts(): Promise<Product[]> {
   try {
-    const { data: prods, error: prodErr } = await supabase.from('products').select('*');
+    const { data: prods, error: prodErr } = await supabase.from('products').select('*').order('created_at', { ascending: false });
     if (prodErr || !prods) {
-      console.warn('Supabase products fetch info:', prodErr?.message);
+      console.warn('Supabase products fetch warning:', prodErr?.message);
       return [];
     }
 
     const { data: variantsData, error: varErr } = await supabase.from('product_variants').select('*');
     if (varErr) {
-      console.warn('Supabase product variants fetch info:', varErr.message);
+      console.warn('Supabase product variants fetch warning:', varErr.message);
     }
 
     return prods.map((p) => {
@@ -226,6 +223,8 @@ export async function dbSaveProduct(product: Product): Promise<{ success: boolea
       quantity: Number(product.quantity || 0),
       min_stock: Number(product.minStock || 1),
       image_url: product.imageUrl || '',
+      description: product.description || '',
+      sales_count: Number(product.salesCount || 0),
       updated_at: new Date().toISOString()
     };
 
@@ -293,7 +292,7 @@ export async function dbSaveProduct(product: Product): Promise<{ success: boolea
     }
 
     if (!savedData && lastError) {
-      console.warn('Supabase product save error after all attempts:', lastError);
+      console.warn('Supabase product save error:', lastError);
       return { success: false, error: lastError };
     }
 
@@ -339,7 +338,6 @@ export async function dbDeleteProduct(id: string): Promise<boolean> {
     if (isUuid) {
       query = query.eq('id', id);
     } else {
-      // Delete by ID or SKU matching ID
       query = query.or(`id.eq.${id},sku.eq.${id}`);
     }
     const { error } = await query;
@@ -359,25 +357,53 @@ export async function dbDeleteProduct(id: string): Promise<boolean> {
 // ==========================================
 export async function dbFetchTransactions(): Promise<Transaction[]> {
   try {
-    const { data, error } = await supabase.from('transactions').select('*').order('created_at', { ascending: false });
+    const { data, error } = await supabase
+      .from('transactions')
+      .select('*')
+      .order('created_at', { ascending: false });
+
     if (error || !data) {
-      console.warn('Supabase transactions fetch info:', error?.message);
+      console.warn('Supabase transactions fetch warning:', error?.message);
       return [];
     }
 
-    return data.map((t) => ({
-      id: t.id,
-      productId: t.product_id || '',
-      productName: t.product_name,
-      sku: t.sku,
-      category: t.category,
-      type: t.type as 'entrada' | 'saida',
-      quantity: Number(t.quantity),
-      price: Number(t.price),
-      date: t.date,
-      time: t.time,
-      timestamp: new Date(t.created_at).getTime(),
-    }));
+    return data.map((t) => {
+      // Calculate robust timestamp
+      let timestamp = Date.now();
+      if (t.created_at) {
+        const parsed = new Date(t.created_at).getTime();
+        if (!isNaN(parsed) && parsed > 0) timestamp = parsed;
+      } else if (t.date) {
+        const dateParts = t.date.includes('-') ? t.date.split('-') : t.date.split('/');
+        if (dateParts.length === 3) {
+          const y = Number(dateParts[0].length === 4 ? dateParts[0] : dateParts[2]);
+          const m = Number(dateParts[1]) - 1;
+          const d = Number(dateParts[0].length === 4 ? dateParts[2] : dateParts[0]);
+          let h = 12, min = 0;
+          if (t.time && t.time.includes(':')) {
+            const timeParts = t.time.split(':');
+            h = Number(timeParts[0]) || 0;
+            min = Number(timeParts[1]) || 0;
+          }
+          const dt = new Date(y, m, d, h, min);
+          if (!isNaN(dt.getTime())) timestamp = dt.getTime();
+        }
+      }
+
+      return {
+        id: t.id,
+        productId: t.product_id || '',
+        productName: t.product_name,
+        sku: t.sku,
+        category: t.category,
+        type: t.type as 'entrada' | 'saida',
+        quantity: Number(t.quantity || 1),
+        price: Number(t.price || 0),
+        date: t.date,
+        time: t.time,
+        timestamp,
+      };
+    });
   } catch (err) {
     console.error('Failed to fetch transactions from Supabase:', err);
     return [];
@@ -400,17 +426,31 @@ export async function dbSaveTransaction(tx: Transaction): Promise<{ success: boo
       }
     }
 
-    const { error } = await supabase.from('transactions').insert([{
+    const payload: any = {
       product_id: targetProductId,
       product_name: tx.productName,
       sku: tx.sku,
       type: tx.type,
-      category: tx.category,
+      category: tx.category || 'Geral',
       quantity: tx.quantity,
       price: tx.price,
       date: tx.date || new Date().toISOString().split('T')[0],
       time: tx.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    }]);
+    };
+
+    if (UUID_REGEX.test(tx.id)) {
+      payload.id = tx.id;
+    }
+
+    // Attempt 1: Try standard insert
+    let { error } = await supabase.from('transactions').insert([payload]);
+
+    // Attempt 2: If failed because foreign key constraint violated (product_id doesn't exist in DB yet), retry with product_id: null
+    if (error && (error.code === '23503' || error.message?.toLowerCase().includes('foreign key'))) {
+      payload.product_id = null;
+      const retryRes = await supabase.from('transactions').insert([payload]);
+      error = retryRes.error;
+    }
 
     if (error) {
       console.warn('Could not save transaction to Supabase:', error.message);
@@ -459,4 +499,79 @@ export async function dbResetProductsSalesCount(): Promise<boolean> {
   }
 }
 
+// ==========================================
+// 5. MONTHLY CLOSINGS
+// ==========================================
+export async function dbFetchMonthlyClosings(): Promise<MonthlyClosing[]> {
+  try {
+    const { data, error } = await supabase
+      .from('monthly_closings')
+      .select('*')
+      .order('closed_at', { ascending: false });
 
+    if (error || !data) {
+      console.warn('Supabase monthly_closings fetch warning:', error?.message);
+      return [];
+    }
+
+    return data.map((c) => ({
+      id: c.id,
+      monthKey: c.month || c.month_key || '',
+      periodRef: c.period_ref || '',
+      closingDay: Number(c.closing_day || 30),
+      closedAt: c.closed_at || new Date().toISOString(),
+      closedAtFormatted: c.closed_at_formatted || new Date(c.closed_at).toLocaleDateString('pt-BR'),
+      totalRevenue: Number(c.total_revenue || 0),
+      totalQuantitySold: Number(c.total_quantity_sold || 0),
+      totalSalesCount: Number(c.total_sales_count || 0),
+      totalEntriesCount: Number(c.total_entries_count || 0),
+      topProducts: Array.isArray(c.top_products) ? c.top_products : [],
+      categoryBreakdown: Array.isArray(c.category_breakdown) ? c.category_breakdown : [],
+      isManual: Boolean(c.is_manual),
+    }));
+  } catch (err) {
+    console.error('Failed to fetch monthly closings from Supabase:', err);
+    return [];
+  }
+}
+
+export async function dbSaveMonthlyClosing(closing: MonthlyClosing): Promise<{ success: boolean; error?: string }> {
+  try {
+    const payload = {
+      id: closing.id,
+      month: closing.monthKey,
+      period_ref: closing.periodRef,
+      total_revenue: closing.totalRevenue,
+      total_cost: 0,
+      net_profit: closing.totalRevenue,
+      total_quantity_sold: closing.totalQuantitySold,
+      top_products: closing.topProducts || [],
+      category_breakdown: closing.categoryBreakdown || [],
+      closed_at: closing.closedAt || new Date().toISOString(),
+    };
+
+    const { error } = await supabase.from('monthly_closings').upsert(payload);
+    if (error) {
+      console.warn('Could not save monthly closing to Supabase:', error.message);
+      return { success: false, error: error.message };
+    }
+    return { success: true };
+  } catch (err: any) {
+    console.error('Error saving monthly closing to Supabase:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+export async function dbDeleteMonthlyClosing(id: string): Promise<boolean> {
+  try {
+    const { error } = await supabase.from('monthly_closings').delete().eq('id', id);
+    if (error) {
+      console.warn('Could not delete monthly closing from Supabase:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('Error deleting monthly closing in Supabase:', err);
+    return false;
+  }
+}

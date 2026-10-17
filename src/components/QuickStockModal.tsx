@@ -12,7 +12,8 @@ interface QuickStockModalProps {
     productId: string,
     type: 'entrada' | 'saida',
     quantity: number,
-    price: number
+    price: number,
+    updatedProductOverride?: Product
   ) => void;
   onOpenEdit?: (product: Product) => void;
   onOpenDetails?: (product: Product) => void;
@@ -59,10 +60,10 @@ export default function QuickStockModal({
       quantity: newQty,
     };
 
-    onUpdateProduct(updatedProduct);
-
     if (onRecordTransaction && actualDelta > 0) {
-      onRecordTransaction(product.id, type, actualDelta, product.price);
+      onRecordTransaction(product.id, type, actualDelta, product.price, updatedProduct);
+    } else {
+      onUpdateProduct(updatedProduct);
     }
 
     showFeedback(
@@ -95,10 +96,10 @@ export default function QuickStockModal({
       quantity: newTotalQuantity,
     };
 
-    onUpdateProduct(updatedProduct);
-
     if (onRecordTransaction) {
-      onRecordTransaction(product.id, type, stepQty, product.price);
+      onRecordTransaction(product.id, type, stepQty, product.price, updatedProduct);
+    } else {
+      onUpdateProduct(updatedProduct);
     }
 
     showFeedback(

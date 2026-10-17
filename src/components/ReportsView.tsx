@@ -72,32 +72,41 @@ export default function ReportsView({
     }).format(val);
   };
 
-  // Helper date parsing for transactions
+  // Helper date parsing for transactions - Timezone-safe local parsing
   const parseTxDate = (tx: Transaction): Date => {
-    if (tx.timestamp) return new Date(tx.timestamp);
+    if (typeof tx.timestamp === 'number' && tx.timestamp > 0) {
+      return new Date(tx.timestamp);
+    }
     if (tx.date) {
-      if (tx.date.includes('-')) {
-        return new Date(tx.date);
-      }
-      if (tx.date.includes('/')) {
-        const parts = tx.date.split('/');
-        if (parts.length === 3) {
-          return new Date(Number(parts[2]), Number(parts[1]) - 1, Number(parts[0]));
+      const parts = tx.date.includes('-') ? tx.date.split('-') : tx.date.split('/');
+      if (parts.length === 3) {
+        const y = Number(parts[0].length === 4 ? parts[0] : parts[2]);
+        const m = Number(parts[1]) - 1;
+        const d = Number(parts[0].length === 4 ? parts[2] : parts[0]);
+        let h = 12;
+        let min = 0;
+        if (tx.time && tx.time.includes(':')) {
+          const tParts = tx.time.split(':');
+          h = Number(tParts[0]) || 0;
+          min = Number(tParts[1]) || 0;
         }
+        const dt = new Date(y, m, d, h, min);
+        if (!isNaN(dt.getTime())) return dt;
       }
     }
     return new Date();
   };
 
   const now = new Date();
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  const sevenDaysAgo = now.getTime() - 7 * 24 * 60 * 60 * 1000;
-  const thirtyDaysAgo = now.getTime() - 30 * 24 * 60 * 60 * 1000;
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0).getTime();
+  const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).getTime();
+  const sevenDaysAgo = startOfToday - 6 * 24 * 60 * 60 * 1000;
+  const thirtyDaysAgo = startOfToday - 29 * 24 * 60 * 60 * 1000;
 
   // 1. TODAY'S SALES VALUE
   const todayTransactions = transactions.filter((t) => {
     const txTime = parseTxDate(t).getTime();
-    return txTime >= startOfToday;
+    return txTime >= startOfToday && txTime <= endOfToday;
   });
 
   const valorVendidoHoje = todayTransactions
@@ -112,12 +121,12 @@ export default function ReportsView({
   const filteredTransactions = transactions.filter((t) => {
     const txTime = parseTxDate(t).getTime();
     if (activeRange === 'Hoje') {
-      return txTime >= startOfToday;
+      return txTime >= startOfToday && txTime <= endOfToday;
     }
     if (activeRange === 'Semana') {
-      return txTime >= sevenDaysAgo;
+      return txTime >= sevenDaysAgo && txTime <= endOfToday;
     }
-    return txTime >= thirtyDaysAgo;
+    return txTime >= thirtyDaysAgo && txTime <= endOfToday;
   });
 
   // Period Metrics Calculations
@@ -174,10 +183,70 @@ export default function ReportsView({
     })
     .sort((a, b) => b.totalValue - a.totalValue);
 
-  // Top products
+  // Calculation of products sold in the selected period (Hoje, Semana, Mês)
+  const productSalesMap = new Map<string, {
+    productId: string;
+    productName: string;
+    sku: string;
+    category: string;
+    imageUrl: string;
+    quantitySold: number;
+    totalRevenue: number;
+    unitPrice: number;
+    lastSaleTime?: string;
+  }>();
+
+  periodSalesTxs.forEach((tx) => {
+    const key = tx.productId || tx.sku || tx.productName;
+    const existing = productSalesMap.get(key);
+    const relatedProd = products.find((p) => p.id === tx.productId || p.sku === tx.sku);
+    const img = relatedProd?.imageUrl || '';
+    if (existing) {
+      existing.quantitySold += tx.quantity;
+      existing.totalRevenue += tx.price * tx.quantity;
+      if (!existing.imageUrl && img) existing.imageUrl = img;
+    } else {
+      productSalesMap.set(key, {
+        productId: tx.productId || '',
+        productName: tx.productName,
+        sku: tx.sku || '',
+        category: tx.category || 'Geral',
+        imageUrl: img,
+        quantitySold: tx.quantity,
+        totalRevenue: tx.price * tx.quantity,
+        unitPrice: tx.price,
+        lastSaleTime: `${tx.date} ${tx.time}`,
+      });
+    }
+  });
+
+  const periodSoldProducts = Array.from(productSalesMap.values()).sort(
+    (a, b) => b.quantitySold - a.quantitySold
+  );
+
+  // All-time top selling products (combining product salesCount + all historical transactions)
+  const allTimeProductSales = new Map<string, number>();
+  products.forEach((p) => {
+    if (p.salesCount > 0) allTimeProductSales.set(p.id, p.salesCount);
+  });
+  transactions
+    .filter((t) => t.type === 'saida')
+    .forEach((tx) => {
+      const p = products.find((prod) => prod.id === tx.productId || prod.sku === tx.sku);
+      const key = p ? p.id : tx.productId || tx.sku;
+      if (key) {
+        allTimeProductSales.set(key, (allTimeProductSales.get(key) || 0) + tx.quantity);
+      }
+    });
+
   const topProducts = [...products]
+    .map((p) => ({
+      ...p,
+      salesCount: Math.max(p.salesCount || 0, allTimeProductSales.get(p.id) || 0),
+    }))
+    .filter((p) => p.salesCount > 0)
     .sort((a, b) => b.salesCount - a.salesCount)
-    .slice(0, 3);
+    .slice(0, 5);
 
   // Chart Setup for Period
   const chartLabels =
@@ -800,39 +869,207 @@ Fim do Relatório - Marento Store Luxury Control
         </div>
       </div>
 
-      {/* Produtos Mais Vendidos Section */}
+      {/* 1. ITENS VENDIDOS NO PERÍODO (Hoje / Semana / Mês) */}
+      <div className="rounded-2xl bg-brand-secondary p-5 border border-brand-tertiary space-y-4" id="reports-items-sold-card">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-brand-tertiary/40 pb-3" id="reports-items-sold-header">
+          <div className="space-y-1">
+            <h3 className="font-serif font-semibold text-lg text-brand-neutral tracking-tight flex items-center gap-2">
+              <ShoppingBag className="w-5 h-5 text-brand-primary" />
+              <span>Itens Vendidos no Período ({activeRange})</span>
+            </h3>
+            <p className="text-xs text-gray-400">
+              Produtos e peças com saídas registradas em <strong className="text-brand-neutral">{activeRange.toLowerCase()}</strong>.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold px-3 py-1 rounded-full bg-emerald-950/60 border border-emerald-500/30 text-emerald-300">
+              {qtdSaidasPeriodo} {qtdSaidasPeriodo === 1 ? 'peça vendida' : 'peças vendidas'}
+            </span>
+            <span className="text-xs font-bold px-3 py-1 rounded-full bg-brand-primary/10 border border-brand-primary/30 text-brand-primary">
+              {formatCurrency(faturamentoPeriodo)}
+            </span>
+          </div>
+        </div>
+
+        {periodSoldProducts.length === 0 ? (
+          <div className="p-6 text-center bg-brand-bg/40 rounded-xl border border-brand-tertiary/30 space-y-2">
+            <ShoppingBag className="w-8 h-8 text-gray-500 mx-auto" />
+            <p className="text-xs text-gray-300 font-bold">
+              Nenhuma saída ou venda registrada no período ({activeRange}).
+            </p>
+            <p className="text-[11px] text-gray-500 max-w-md mx-auto">
+              Ao registrar saídas de estoque pelo Painel ou Leitor de Código de Barras, os itens e faturamentos aparecerão listados aqui automaticamente.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-2.5" id="reports-sold-items-list">
+            {periodSoldProducts.map((item, idx) => {
+              const itemShare = faturamentoPeriodo > 0 ? (item.totalRevenue / faturamentoPeriodo) * 100 : 0;
+              return (
+                <div
+                  key={`sold-item-${item.productId || item.sku}-${idx}`}
+                  className="p-3.5 bg-brand-bg/80 hover:bg-brand-bg rounded-xl border border-brand-tertiary/60 transition space-y-2.5"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-12 h-12 rounded-xl overflow-hidden border border-brand-tertiary/40 bg-brand-secondary shrink-0 flex items-center justify-center">
+                        {item.imageUrl ? (
+                          <img
+                            src={item.imageUrl}
+                            alt={item.productName}
+                            referrerPolicy="no-referrer"
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <Package className="w-6 h-6 text-gray-500" />
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <h4 className="text-xs font-bold text-brand-neutral truncate">{item.productName}</h4>
+                        <div className="flex items-center gap-2 mt-0.5 text-[10px] text-gray-400">
+                          <span className="font-mono">SKU: {item.sku}</span>
+                          <span>•</span>
+                          <span className="px-1.5 py-0.2 rounded bg-brand-secondary text-brand-primary border border-brand-tertiary">
+                            {item.category}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="text-right shrink-0">
+                      <div className="flex items-baseline justify-end gap-1.5">
+                        <span className="font-serif font-bold text-sm text-brand-primary">
+                          {formatCurrency(item.totalRevenue)}
+                        </span>
+                      </div>
+                      <span className="text-[10px] font-bold text-emerald-400 block mt-0.5">
+                        {item.quantitySold} {item.quantitySold === 1 ? 'unidade vendida' : 'unidades vendidas'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Percentage bar of total sales in period */}
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-[9px] text-gray-500">
+                      <span>{item.quantitySold}x a {formatCurrency(item.unitPrice)}</span>
+                      <span>{itemShare.toFixed(1)}% do faturamento de {activeRange.toLowerCase()}</span>
+                    </div>
+                    <div className="w-full bg-brand-tertiary/30 h-1.5 rounded-full overflow-hidden">
+                      <div
+                        className="bg-brand-primary h-full rounded-full transition-all duration-500"
+                        style={{ width: `${Math.max(itemShare, 2)}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* 2. HISTÓRICO DE MOVIMENTAÇÕES NO PERÍODO */}
+      <div className="rounded-2xl bg-brand-secondary p-5 border border-brand-tertiary space-y-4" id="reports-tx-history-card">
+        <div className="flex items-center justify-between border-b border-brand-tertiary/40 pb-3">
+          <div className="space-y-1">
+            <h3 className="font-serif font-semibold text-base text-brand-neutral tracking-tight flex items-center gap-2">
+              <Clock className="w-4 h-4 text-brand-primary" />
+              <span>Histórico de Movimentações ({activeRange})</span>
+            </h3>
+            <p className="text-[10px] text-gray-400">
+              Todas as entradas e saídas registradas cronologicamente
+            </p>
+          </div>
+          <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-brand-bg text-gray-400 border border-brand-tertiary">
+            {filteredTransactions.length} registros
+          </span>
+        </div>
+
+        {filteredTransactions.length === 0 ? (
+          <p className="text-xs text-gray-500 text-center py-4">Nenhuma movimentação registrada em {activeRange}.</p>
+        ) : (
+          <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+            {filteredTransactions.map((tx, idx) => (
+              <div
+                key={`tx-row-${tx.id || idx}-${idx}`}
+                className="flex items-center justify-between p-2.5 bg-brand-bg/70 rounded-xl border border-brand-tertiary/40 text-xs"
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <span
+                    className={`px-2 py-0.5 rounded-lg text-[9px] font-bold uppercase shrink-0 ${
+                      tx.type === 'saida'
+                        ? 'bg-rose-950/60 text-rose-300 border border-rose-500/40'
+                        : 'bg-emerald-950/60 text-emerald-300 border border-emerald-500/40'
+                    }`}
+                  >
+                    {tx.type === 'saida' ? 'Saída' : 'Entrada'}
+                  </span>
+                  <div className="min-w-0">
+                    <span className="font-bold text-brand-neutral block truncate">{tx.productName}</span>
+                    <span className="text-[9px] text-gray-500 font-mono">
+                      {tx.date} às {tx.time} • SKU: {tx.sku}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="text-right shrink-0 font-mono">
+                  <span className={`font-bold block ${tx.type === 'saida' ? 'text-rose-400' : 'text-emerald-400'}`}>
+                    {tx.type === 'saida' ? '-' : '+'}{tx.quantity} un
+                  </span>
+                  <span className="text-[9px] text-gray-400 block">
+                    {formatCurrency(tx.price * tx.quantity)}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* 3. RANKING GERAL DE PRODUTOS MAIS VENDIDOS */}
       <div className="space-y-3" id="reports-tops-container">
         <h3 className="font-serif font-semibold text-lg text-brand-neutral tracking-tight" id="reports-tops-title">
-          Produtos Mais Vendidos
+          Ranking Geral de Produtos Mais Vendidos
         </h3>
 
         <div className="space-y-2.5" id="reports-tops-list">
-          {topProducts.map((p, idx) => (
-            <div
-              key={`rpt-top-${p.id}-${idx}`}
-              className="flex items-center justify-between p-3 bg-brand-secondary rounded-xl border border-brand-tertiary/40 shadow-sm"
-              id={`reports-top-${p.id}`}
-            >
-              <div className="flex items-center gap-3 min-w-0" id={`reports-top-left-${p.id}`}>
-                <div className="w-11 h-11 rounded-lg overflow-hidden border border-brand-tertiary/30 bg-brand-bg shrink-0" id={`reports-top-img-box-${p.id}`}>
-                  <img src={p.imageUrl} alt={p.name} referrerPolicy="no-referrer" className="w-full h-full object-cover" id={`reports-top-img-${p.id}`} />
+          {topProducts.length === 0 ? (
+            <p className="text-xs text-gray-500 text-center py-4 bg-brand-secondary rounded-xl border border-brand-tertiary">
+              Nenhuma venda registrada até o momento.
+            </p>
+          ) : (
+            topProducts.map((p, idx) => (
+              <div
+                key={`rpt-top-${p.id}-${idx}`}
+                className="flex items-center justify-between p-3 bg-brand-secondary rounded-xl border border-brand-tertiary/40 shadow-sm"
+                id={`reports-top-${p.id}`}
+              >
+                <div className="flex items-center gap-3 min-w-0" id={`reports-top-left-${p.id}`}>
+                  <div className="w-11 h-11 rounded-lg overflow-hidden border border-brand-tertiary/30 bg-brand-bg shrink-0 flex items-center justify-center" id={`reports-top-img-box-${p.id}`}>
+                    {p.imageUrl ? (
+                      <img src={p.imageUrl} alt={p.name} referrerPolicy="no-referrer" className="w-full h-full object-cover" id={`reports-top-img-${p.id}`} />
+                    ) : (
+                      <Package className="w-5 h-5 text-gray-500" />
+                    )}
+                  </div>
+                  <div className="min-w-0" id={`reports-top-desc-${p.id}`}>
+                    <h4 className="text-xs font-bold text-brand-neutral truncate" id={`reports-top-name-${p.id}`}>{p.name}</h4>
+                    <p className="text-[9px] text-gray-500 mt-0.5" id={`reports-top-sku-${p.id}`}>SKU: {p.sku} • {p.category}</p>
+                  </div>
                 </div>
-                <div className="min-w-0" id={`reports-top-desc-${p.id}`}>
-                  <h4 className="text-xs font-bold text-brand-neutral truncate" id={`reports-top-name-${p.id}`}>{p.name}</h4>
-                  <p className="text-[9px] text-gray-500 mt-0.5" id={`reports-top-sku-${p.id}`}>SKU: {p.sku}</p>
-                </div>
-              </div>
 
-              <div className="text-right shrink-0 font-mono" id={`reports-top-right-${p.id}`}>
-                <span className="block text-xs font-bold text-brand-primary" id={`reports-top-sales-${p.id}`}>
-                  {p.salesCount} vendas
-                </span>
-                <span className="block text-[8px] text-gray-500 mt-0.5" id={`reports-top-rate-${p.id}`}>
-                  {formatCurrency(p.price)}/un
-                </span>
+                <div className="text-right shrink-0 font-mono" id={`reports-top-right-${p.id}`}>
+                  <span className="block text-xs font-bold text-brand-primary" id={`reports-top-sales-${p.id}`}>
+                    {p.salesCount} vendas no total
+                  </span>
+                  <span className="block text-[8px] text-gray-500 mt-0.5" id={`reports-top-rate-${p.id}`}>
+                    {formatCurrency(p.price)}/un
+                  </span>
+                </div>
               </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       </div>
 

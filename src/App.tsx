@@ -10,11 +10,9 @@ import {
   Barcode,
   Printer,
   Receipt,
-  Database,
   User,
   UserCheck,
-  Lock,
-  AlertCircle
+  Lock
 } from 'lucide-react';
 
 import { Product, Transaction, Notification, CategoryName, ProductVariant, MonthlyClosing } from './types';
@@ -30,7 +28,6 @@ import BarcodeScannerModal from './components/BarcodeScannerModal';
 import PrintTagModal from './components/PrintTagModal';
 import PrintReceiptModal from './components/PrintReceiptModal';
 import NfceModal from './components/NfceModal';
-import DatabaseStatusModal from './components/DatabaseStatusModal';
 import LoginModal from './components/LoginModal';
 import marrentoLogo from '../assets/img/marrento store logo.jpg';
 import { useBarcodeScanner } from './utils/useBarcodeScanner';
@@ -49,7 +46,10 @@ import {
   dbFetchTransactions,
   dbSaveTransaction,
   dbClearTransactions,
-  dbResetProductsSalesCount
+  dbResetProductsSalesCount,
+  dbFetchMonthlyClosings,
+  dbSaveMonthlyClosing,
+  dbDeleteMonthlyClosing
 } from './lib/dbService';
 
 export default function App() {
@@ -118,10 +118,8 @@ export default function App() {
   const [quickOpProductId, setQuickOpProductId] = useState<string | undefined>(undefined);
   const [quickOpType, setQuickOpType] = useState<'entrada' | 'saida'>('entrada');
 
-  // 4. Barcode Scanner, Database, Printer & NFC-e Modals States
+  // 4. Barcode Scanner, Printer & NFC-e Modals States
   const [isScannerOpen, setIsScannerOpen] = useState(false);
-  const [isDbStatusOpen, setIsDbStatusOpen] = useState(false);
-  const [dbSyncError, setDbSyncError] = useState<string | null>(null);
   const [printTagProduct, setPrintTagProduct] = useState<Product | null>(null);
   const [printTagVariant, setPrintTagVariant] = useState<ProductVariant | null>(null);
   const [isPrintTagOpen, setIsPrintTagOpen] = useState(false);
@@ -325,44 +323,93 @@ export default function App() {
     setNotifications([]);
   };
 
-  const handleSaveMonthlyClosing = (closing: MonthlyClosing) => {
+  const handleSaveMonthlyClosing = async (closing: MonthlyClosing) => {
     setMonthlyClosings((prev) => [closing, ...prev.filter((c) => c.id !== closing.id)]);
+    await dbSaveMonthlyClosing(closing);
   };
 
-  const handleDeleteMonthlyClosing = (id: string) => {
+  const handleDeleteMonthlyClosing = async (id: string) => {
     setMonthlyClosings((prev) => prev.filter((c) => c.id !== id));
+    await dbDeleteMonthlyClosing(id);
   };
 
   // Initial Sync & Real-Time Sync from Supabase across devices
   useEffect(() => {
+    let isMounted = true;
+
     async function loadFromSupabase() {
       try {
-        const [remoteCats, remoteSups, remoteProds, remoteTxs] = await Promise.all([
+        const [remoteCats, remoteSups, remoteProds, remoteTxs, remoteClosings] = await Promise.all([
           dbFetchCategories(),
           dbFetchSuppliers(),
           dbFetchProducts(),
-          dbFetchTransactions()
+          dbFetchTransactions(),
+          dbFetchMonthlyClosings()
         ]);
 
+        if (!isMounted) return;
+
+        // 1. Categories sync
         if (remoteCats.length > 0) {
-          setCategories(Array.from(new Set(remoteCats)));
-        }
-        if (remoteSups.length > 0) {
-          setSuppliers(Array.from(new Set(remoteSups)));
-        }
-        if (remoteProds.length > 0) {
-          setProducts((prev) => {
-            const map = new Map<string, Product>();
-            prev.forEach((p) => map.set(p.id, p));
-            remoteProds.forEach((p) => map.set(p.id, p));
-            return Array.from(map.values());
+          setCategories(remoteCats);
+        } else {
+          // If remote is empty, seed from local
+          setCategories((prev) => {
+            prev.forEach((cat) => dbAddCategory(cat));
+            return prev;
           });
         }
-        
-        // Sync transactions with database (resets reflect immediately if database was cleared)
-        setTransactions(remoteTxs);
+
+        // 2. Suppliers sync
+        if (remoteSups.length > 0) {
+          setSuppliers(remoteSups);
+        } else {
+          // If remote is empty, seed from local
+          setSuppliers((prev) => {
+            prev.forEach((sup) => dbAddSupplier(sup));
+            return prev;
+          });
+        }
+
+        // 3. Products sync (Supabase as source of truth)
+        if (remoteProds.length > 0) {
+          setProducts(remoteProds);
+        } else {
+          // If remote is empty, seed initial products to Supabase
+          setProducts((prev) => {
+            if (prev.length > 0) {
+              prev.forEach((p) => dbSaveProduct(p));
+            }
+            return prev;
+          });
+        }
+
+        // 4. Transactions sync (Supabase as source of truth)
+        if (remoteTxs.length > 0) {
+          setTransactions(remoteTxs);
+        } else {
+          // If remote is empty, seed local transactions to Supabase
+          setTransactions((prev) => {
+            if (prev.length > 0) {
+              prev.forEach((t) => dbSaveTransaction(t));
+            }
+            return prev;
+          });
+        }
+
+        // 5. Monthly Closings sync
+        if (remoteClosings.length > 0) {
+          setMonthlyClosings(remoteClosings);
+        } else {
+          setMonthlyClosings((prev) => {
+            if (prev.length > 0) {
+              prev.forEach((c) => dbSaveMonthlyClosing(c));
+            }
+            return prev;
+          });
+        }
       } catch (e) {
-        console.warn('Supabase fetch attempt completed with warnings:', e);
+        console.warn('[Supabase Sync Warning]:', e);
       }
     }
 
@@ -378,7 +425,7 @@ export default function App() {
           { event: '*', schema: 'public', table: 'categories' },
           async () => {
             const remoteCats = await dbFetchCategories();
-            if (remoteCats.length > 0) setCategories(Array.from(new Set(remoteCats)));
+            if (remoteCats.length > 0) setCategories(remoteCats);
           }
         )
         .on(
@@ -386,7 +433,7 @@ export default function App() {
           { event: '*', schema: 'public', table: 'suppliers' },
           async () => {
             const remoteSups = await dbFetchSuppliers();
-            if (remoteSups.length > 0) setSuppliers(Array.from(new Set(remoteSups)));
+            if (remoteSups.length > 0) setSuppliers(remoteSups);
           }
         )
         .on(
@@ -410,20 +457,31 @@ export default function App() {
           { event: '*', schema: 'public', table: 'transactions' },
           async () => {
             const remoteTxs = await dbFetchTransactions();
-            setTransactions(remoteTxs);
+            if (remoteTxs.length > 0) setTransactions(remoteTxs);
           }
         )
-        .subscribe();
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'monthly_closings' },
+          async () => {
+            const remoteClosings = await dbFetchMonthlyClosings();
+            if (remoteClosings.length > 0) setMonthlyClosings(remoteClosings);
+          }
+        )
+        .subscribe((status) => {
+          console.log('[Supabase Realtime status]:', status);
+        });
     } catch (err) {
-      console.warn('Realtime channel setup warning:', err);
+      console.warn('[Supabase Realtime Channel Warning]:', err);
     }
 
-    // Secondary fallback polling every 10s for seamless sync
+    // Secondary active sync polling every 4s for absolute cross-device parity
     const pollInterval = setInterval(() => {
       loadFromSupabase();
-    }, 10000);
+    }, 4000);
 
     return () => {
+      isMounted = false;
       if (channel) {
         supabase.removeChannel(channel);
       }
@@ -440,12 +498,10 @@ export default function App() {
       return;
     }
     setCategories((prev) => [...prev, cleanName]);
-    // Save to Supabase
+    // Save to Supabase silently in backend
     const res = await dbAddCategory(cleanName);
     if (res && !res.success && res.error) {
-      setDbSyncError(`Aviso Supabase (Categoria): ${res.error}`);
-    } else {
-      setDbSyncError(null);
+      console.warn('[Supabase Category Save Warning]:', res.error);
     }
   };
 
@@ -491,9 +547,7 @@ export default function App() {
     setSuppliers((prev) => [...prev, cleanName]);
     const res = await dbAddSupplier(cleanName);
     if (res && !res.success && res.error) {
-      setDbSyncError(`Aviso Supabase (Fornecedor): ${res.error}`);
-    } else {
-      setDbSyncError(null);
+      console.warn('[Supabase Supplier Save Warning]:', res.error);
     }
   };
 
@@ -577,12 +631,10 @@ export default function App() {
     };
     setProducts((prev) => [product, ...prev]);
 
-    // Save product to Supabase
+    // Save product to Supabase silently in backend
     const res = await dbSaveProduct(product);
     if (res && !res.success && res.error) {
-      setDbSyncError(`Aviso Supabase ao salvar produto "${product.name}": ${res.error}`);
-    } else {
-      setDbSyncError(null);
+      console.warn(`[Supabase Product Save Warning "${product.name}"]:`, res.error);
     }
 
     // Push automatic creation transaction
@@ -596,11 +648,10 @@ export default function App() {
     setProducts((prev) =>
       prev.map((p) => (p.id === updatedProd.id ? updatedProd : p))
     );
+    // Save edited product to Supabase silently in backend
     const res = await dbSaveProduct(updatedProd);
     if (res && !res.success && res.error) {
-      setDbSyncError(`Aviso Supabase ao editar produto: ${res.error}`);
-    } else {
-      setDbSyncError(null);
+      console.warn('[Supabase Product Edit Warning]:', res.error);
     }
   };
 
@@ -616,25 +667,35 @@ export default function App() {
     productId: string,
     type: 'entrada' | 'saida',
     qty: number,
-    price: number
+    price: number,
+    customProductOverride?: Product
   ) => {
-    const prod = products.find((p) => p.id === productId);
-    if (!prod) return;
+    const baseProd = customProductOverride || products.find((p) => p.id === productId);
+    if (!baseProd) return;
 
     // Check availability if outflow
-    if (type === 'saida' && prod.quantity < qty) {
-      alert(`Quantidade insuficiente! Apenas ${prod.quantity} unidades disponíveis.`);
+    if (type === 'saida' && !customProductOverride && baseProd.quantity < qty) {
+      alert(`Quantidade insuficiente! Apenas ${baseProd.quantity} unidades disponíveis.`);
       return;
     }
 
-    const updatedQty = type === 'entrada' ? prod.quantity + qty : prod.quantity - qty;
-    const updatedSales = type === 'saida' ? prod.salesCount + qty : prod.salesCount;
-    const updatedProduct: Product = {
-      ...prod,
-      quantity: updatedQty,
-      price: price,
-      salesCount: updatedSales
-    };
+    let updatedProduct: Product;
+    if (customProductOverride) {
+      const updatedSales = type === 'saida' ? (customProductOverride.salesCount || 0) + qty : (customProductOverride.salesCount || 0);
+      updatedProduct = {
+        ...customProductOverride,
+        salesCount: updatedSales
+      };
+    } else {
+      const updatedQty = type === 'entrada' ? baseProd.quantity + qty : Math.max(0, baseProd.quantity - qty);
+      const updatedSales = type === 'saida' ? (baseProd.salesCount || 0) + qty : (baseProd.salesCount || 0);
+      updatedProduct = {
+        ...baseProd,
+        quantity: updatedQty,
+        price: price,
+        salesCount: updatedSales
+      };
+    }
 
     // Update quantity & sales count on product state
     setProducts((prev) =>
@@ -648,9 +709,9 @@ export default function App() {
     const tx: Transaction = {
       id: generateUUID(),
       productId,
-      productName: prod.name,
-      sku: prod.sku,
-      category: prod.category,
+      productName: updatedProduct.name,
+      sku: updatedProduct.sku,
+      category: updatedProduct.category,
       type,
       quantity: qty,
       price: price,
@@ -666,9 +727,7 @@ export default function App() {
 
     if ((prodRes && !prodRes.success && prodRes.error) || (txRes && !txRes.success && txRes.error)) {
       const err = prodRes?.error || txRes?.error;
-      setDbSyncError(`Aviso Supabase ao registrar movimentação: ${err}`);
-    } else {
-      setDbSyncError(null);
+      console.warn('[Supabase Transaction Sync Warning]:', err);
     }
   };
 
@@ -723,16 +782,6 @@ export default function App() {
               <span className="hidden sm:inline">Emitir Nota Fiscal</span>
             </button>
 
-            {/* Status do Banco Button (Oculto em mobile para evitar estouro de layout) */}
-            <button
-              onClick={() => setIsDbStatusOpen(true)}
-              className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-full bg-brand-secondary border border-emerald-500/50 text-emerald-400 hover:bg-emerald-500 hover:text-black transition shadow-md cursor-pointer font-bold text-xs shrink-0"
-              title="Verificar Conexão com o Banco Supabase"
-              id="header-db-status-btn"
-            >
-              <Database className="w-4 h-4" />
-              <span className="hidden sm:inline">Status do Banco</span>
-            </button>
 
             {/* Leitor de Código de Barras Bipar Button */}
             <button
@@ -800,29 +849,6 @@ export default function App() {
         </div>
       </header>
 
-      {/* DB Sync Warning Banner if write operation has issue */}
-      {dbSyncError && (
-        <div className="bg-amber-950/90 border-b border-amber-500/50 text-amber-200 px-4 py-2.5 text-xs flex items-center justify-between shadow-xl z-30 animate-fade-in" id="db-sync-error-banner">
-          <div className="flex items-center gap-2 max-w-2xl">
-            <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
-            <span className="font-medium">{dbSyncError}</span>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              onClick={() => setIsDbStatusOpen(true)}
-              className="px-2.5 py-1 bg-amber-500 text-black font-bold text-[10px] uppercase tracking-wider rounded-lg hover:bg-amber-400 transition cursor-pointer"
-            >
-              Resolver
-            </button>
-            <button
-              onClick={() => setDbSyncError(null)}
-              className="text-amber-400 hover:text-amber-200 text-xs px-1 font-bold cursor-pointer"
-            >
-              ✕
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* 2. Main Content Container (Bounded width, elegant layout margins) */}
       <main className="flex-1 max-w-4xl w-full mx-auto px-4 sm:px-6 pt-6" id="app-main">
@@ -1020,11 +1046,6 @@ export default function App() {
         transaction={printReceiptTx}
       />
 
-      {/* 8. Database Status & Health Checker Modal */}
-      <DatabaseStatusModal
-        isOpen={isDbStatusOpen}
-        onClose={() => setIsDbStatusOpen(false)}
-      />
 
       {/* 9. Login / Auth Modal */}
       <LoginModal

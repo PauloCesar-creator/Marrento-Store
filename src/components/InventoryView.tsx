@@ -19,7 +19,8 @@ interface InventoryViewProps {
     productId: string,
     type: 'entrada' | 'saida',
     quantity: number,
-    price: number
+    price: number,
+    updatedProductOverride?: Product
   ) => void;
   suppliers: string[];
   onAddSupplier: (name: string) => void;

@@ -1,15 +1,12 @@
 -- ==============================================================================
 -- MARENTO STORE - SCHEMA COMPLETO DE BANCO DE DADOS (SUPABASE / POSTGRESQL)
 -- ==============================================================================
--- TABELAS LIMPAS (SEM DADOS INICIAIS / SEED)
--- O cliente tem total controle para criar suas próprias categorias, fornecedores e produtos.
---
 -- INSTRUÇÕES DE INSTALAÇÃO NO SUPABASE:
 -- 1. Acesse https://supabase.com/dashboard/project/udkeikmmbroznlwfrbgx
 -- 2. No menu lateral esquerdo, clique em "SQL Editor".
 -- 3. Clique em "+ New query" (Nova consulta).
 -- 4. Cole todo este código e clique no botão verde "Run" (Executar).
--- 5. Todas as tabelas estarão prontas no Table Editor limpas para seu cliente cadastrar!
+-- 5. Todas as tabelas e permissões para múltiplos aparelhos estarão 100% liberadas!
 -- ==============================================================================
 
 -- 1. Extensões para identificadores únicos (UUID)
@@ -160,17 +157,44 @@ CREATE INDEX IF NOT EXISTS idx_financial_type ON public.financial_entries(type);
 CREATE INDEX IF NOT EXISTS idx_financial_date ON public.financial_entries(entry_date);
 
 -- ==============================================================================
--- 10. PERMISSÕES E ACESSO ANÔNIMO DIRETO
+-- 10. LIBERAÇÃO COMPLETA DE PERMISSÕES E ACESSO RLS (MULTI-DISPOSITIVOS)
 -- ==============================================================================
-ALTER TABLE public.categories DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.suppliers DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.products DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.product_variants DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.transactions DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.notifications DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.monthly_closings DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.financial_entries DISABLE ROW LEVEL SECURITY;
+-- Desativa o RLS restritivo para permitir gravação instantânea:
+ALTER TABLE IF EXISTS public.categories DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.suppliers DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.products DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.product_variants DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.transactions DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.notifications DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.monthly_closings DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.financial_entries DISABLE ROW LEVEL SECURITY;
 
+-- Garante que se o Supabase mantiver RLS ativo, existam políticas públicas permissivas:
+DROP POLICY IF EXISTS "anon_all_categories" ON public.categories;
+CREATE POLICY "anon_all_categories" ON public.categories FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "anon_all_suppliers" ON public.suppliers;
+CREATE POLICY "anon_all_suppliers" ON public.suppliers FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "anon_all_products" ON public.products;
+CREATE POLICY "anon_all_products" ON public.products FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "anon_all_variants" ON public.product_variants;
+CREATE POLICY "anon_all_variants" ON public.product_variants FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "anon_all_transactions" ON public.transactions;
+CREATE POLICY "anon_all_transactions" ON public.transactions FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "anon_all_notifications" ON public.notifications;
+CREATE POLICY "anon_all_notifications" ON public.notifications FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "anon_all_closings" ON public.monthly_closings;
+CREATE POLICY "anon_all_closings" ON public.monthly_closings FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "anon_all_financial" ON public.financial_entries;
+CREATE POLICY "anon_all_financial" ON public.financial_entries FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+-- Concessão explícita de permissões
 GRANT ALL ON TABLE public.categories TO anon, authenticated, service_role;
 GRANT ALL ON TABLE public.suppliers TO anon, authenticated, service_role;
 GRANT ALL ON TABLE public.products TO anon, authenticated, service_role;
@@ -180,12 +204,24 @@ GRANT ALL ON TABLE public.notifications TO anon, authenticated, service_role;
 GRANT ALL ON TABLE public.monthly_closings TO anon, authenticated, service_role;
 GRANT ALL ON TABLE public.financial_entries TO anon, authenticated, service_role;
 
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role;
+
 -- ==============================================================================
 -- 11. HABILITAR SINCRONIZAÇÃO EM TEMPO REAL (REALTIME)
 -- ==============================================================================
+ALTER TABLE public.categories REPLICA IDENTITY FULL;
+ALTER TABLE public.suppliers REPLICA IDENTITY FULL;
+ALTER TABLE public.products REPLICA IDENTITY FULL;
+ALTER TABLE public.product_variants REPLICA IDENTITY FULL;
+ALTER TABLE public.transactions REPLICA IDENTITY FULL;
+ALTER TABLE public.notifications REPLICA IDENTITY FULL;
+ALTER TABLE public.monthly_closings REPLICA IDENTITY FULL;
+
 DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.categories; EXCEPTION WHEN OTHERS THEN NULL; END $$;
 DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.suppliers; EXCEPTION WHEN OTHERS THEN NULL; END $$;
 DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.products; EXCEPTION WHEN OTHERS THEN NULL; END $$;
 DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.product_variants; EXCEPTION WHEN OTHERS THEN NULL; END $$;
 DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.transactions; EXCEPTION WHEN OTHERS THEN NULL; END $$;
 DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.notifications; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.monthly_closings; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+
