@@ -14,10 +14,13 @@ import {
   Layers,
   Upload,
   Tag,
-  CheckCircle2
+  CheckCircle2,
+  Copy,
+  Barcode
 } from 'lucide-react';
 import { Product, ProductVariant } from '../types';
 import { generateUUID } from '../utils/uuid';
+import { generateVariantCode, generateVariantBarcode } from '../utils/variantCode';
 
 interface SmartPanelModalProps {
   product: Product;
@@ -107,6 +110,10 @@ export default function SmartPanelModal({
       return;
     }
 
+    // Generate guaranteed unique variant identification code & barcode
+    const uniqueCode = generateVariantCode(product.sku, variants.length, trimmedName, variants);
+    const uniqueBarcode = generateVariantBarcode(product.sku, variants.length, trimmedName);
+
     const newVariant: ProductVariant = {
       id: generateUUID(),
       name: trimmedName,
@@ -115,7 +122,9 @@ export default function SmartPanelModal({
         newVarImage.trim() ||
         product.imageUrl ||
         'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?auto=format&fit=crop&w=600&q=80',
-      sku: `${product.sku}-${trimmedName.slice(0, 3).toUpperCase()}`,
+      sku: uniqueCode,
+      code: uniqueCode,
+      barcode: uniqueBarcode,
     };
 
     const updatedVariants = [...variants, newVariant];
@@ -149,13 +158,18 @@ export default function SmartPanelModal({
   const handleSaveEdit = (variantId: string) => {
     if (!editVarName.trim()) return;
 
-    const updatedVariants = variants.map((v) => {
+    const updatedVariants = variants.map((v, idx) => {
       if (v.id === variantId) {
+        const uCode = v.code || v.sku || generateVariantCode(product.sku, idx, editVarName.trim());
+        const uBarcode = v.barcode || generateVariantBarcode(product.sku, idx);
         return {
           ...v,
           name: editVarName.trim(),
           quantity: editVarQty,
           imageUrl: editVarImage.trim() || v.imageUrl,
+          sku: uCode,
+          code: uCode,
+          barcode: uBarcode,
         };
       }
       return v;
@@ -523,14 +537,25 @@ export default function SmartPanelModal({
                   </div>
                 </div>
 
+                {/* Code Preview Note */}
+                <div className="sm:col-span-12 flex items-center justify-between text-[11px] font-mono bg-black/40 px-3 py-2 rounded-xl border border-amber-400/20">
+                  <span className="flex items-center gap-1.5 text-amber-300 font-bold text-[10px]">
+                    <Barcode className="w-3.5 h-3.5 text-amber-400" />
+                    Código Único Automático:
+                  </span>
+                  <span className="font-bold text-amber-300 text-xs">
+                    {generateVariantCode(product.sku, variants.length, newVarName.trim() || undefined)}
+                  </span>
+                </div>
+
                 {/* Submit button */}
                 <div className="sm:col-span-12 flex justify-end pt-1">
                   <button
                     type="submit"
-                    className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-brand-primary text-black font-sans font-bold text-xs hover:bg-brand-primary/95 transition cursor-pointer flex items-center justify-center gap-2 shadow-md"
+                    className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#D4A017] via-[#ffd56d] to-[#C59B27] text-black font-sans font-bold text-xs hover:brightness-105 transition cursor-pointer flex items-center justify-center gap-2 shadow-md"
                   >
                     <Plus className="w-4 h-4 stroke-[2.5]" />
-                    Cadastrar Variação (Soma no Estoque)
+                    Cadastrar Variação com Código Único
                   </button>
                 </div>
               </form>
@@ -631,9 +656,19 @@ export default function SmartPanelModal({
                                     <CheckCircle2 className="w-3.5 h-3.5 text-brand-primary" />
                                   )}
                                 </h5>
-                                <span className="text-[10px] text-gray-400 font-mono">
-                                  Estoque: <strong className="text-brand-primary">{v.quantity} un</strong>
-                                </span>
+                                <div className="flex flex-col gap-0.5 mt-0.5">
+                                  <span
+                                    className="inline-flex items-center gap-1 text-[9px] font-mono font-bold text-amber-300 bg-amber-400/10 border border-amber-400/30 px-1.5 py-0.5 rounded cursor-pointer hover:bg-amber-400/20 w-fit"
+                                    onClick={() => navigator.clipboard?.writeText(v.code || v.sku || '')}
+                                    title="Código único da variação (Clique para copiar)"
+                                  >
+                                    <Copy className="w-2.5 h-2.5" />
+                                    {v.code || v.sku || `${product.sku}-V${String(idx + 1).padStart(2, '0')}`}
+                                  </span>
+                                  <span className="text-[10px] text-gray-400 font-mono">
+                                    Estoque: <strong className="text-brand-primary">{v.quantity} un</strong>
+                                  </span>
+                                </div>
                               </div>
                             </div>
 

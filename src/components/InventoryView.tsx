@@ -3,7 +3,6 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Search, Plus, Minus, Trash2, Edit, AlertCircle, ShoppingBag, SlidersHorizontal, Eye, Tag, X, Check, Truck, Sparkles, Layers, Barcode, Printer } from 'lucide-react';
 import { Product, CategoryName } from '../types';
 import SmartPanelModal from './SmartPanelModal';
-import QuickStockModal from './QuickStockModal';
 import ProductDetailModal from './ProductDetailModal';
 import NewItemModal from './NewItemModal';
 
@@ -11,7 +10,6 @@ interface InventoryViewProps {
   products: Product[];
   selectedCategory: CategoryName | 'Todos';
   onSelectCategory: (category: CategoryName | 'Todos') => void;
-  onOpenQuickOp: (productId: string, type: 'entrada' | 'saida') => void;
   onDeleteProduct: (id: string) => void;
   onEditProduct: (product: Product) => void;
   onAddProduct: (product: Omit<Product, 'id' | 'salesCount' | 'createdAt'>) => void;
@@ -39,7 +37,6 @@ export default function InventoryView({
   products,
   selectedCategory,
   onSelectCategory,
-  onOpenQuickOp,
   onDeleteProduct,
   onEditProduct,
   onAddProduct,
@@ -64,8 +61,7 @@ export default function InventoryView({
   const [isAddingCategoryInline, setIsAddingCategoryInline] = useState(false);
   const [newInlineCatName, setNewInlineCatName] = useState('');
 
-  // Quick Stock modal & Product Details modal states
-  const [quickStockProd, setQuickStockProd] = useState<Product | null>(null);
+  // Product Details modal state
   const [detailProd, setDetailProd] = useState<Product | null>(null);
 
   // Smart Panel modal state
@@ -523,33 +519,12 @@ export default function InventoryView({
               {/* Interactive Quick action panel */}
               <div className="flex items-center justify-between gap-1.5 mt-4 pt-3 border-t border-brand-tertiary/60" id={`inv-actions-${prod.id}`}>
                 
-                {/* Plus / Minus Quick stock alterations -> opens QuickStockModal */}
-                <div className="flex items-center gap-1 bg-brand-bg rounded-lg border border-brand-tertiary p-0.5" id={`inv-quick-qty-${prod.id}`}>
-                  <button
-                    onClick={() => setQuickStockProd(prod)}
-                    className="p-1.5 rounded-md hover:bg-brand-secondary text-brand-red transition cursor-pointer"
-                    title="Ajuste Rápido de Estoque"
-                    id={`inv-quick-minus-${prod.id}`}
-                  >
-                    <Minus className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setQuickStockProd(prod)}
-                    className="text-xs font-mono font-bold px-2 text-brand-neutral min-w-[20px] text-center hover:text-brand-primary transition cursor-pointer"
-                    id={`inv-quick-display-${prod.id}`}
-                    title="Ajuste Rápido de Estoque"
-                  >
-                    {prod.quantity}
-                  </button>
-                  <button
-                    onClick={() => setQuickStockProd(prod)}
-                    className="p-1.5 rounded-md hover:bg-brand-secondary text-brand-green transition cursor-pointer"
-                    title="Ajuste Rápido de Estoque"
-                    id={`inv-quick-plus-${prod.id}`}
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                  </button>
+                {/* Stock Indicator Badge (clean display, no quick stock modal) */}
+                <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-brand-bg border border-brand-tertiary/70 shadow-inner" id={`inv-stock-badge-${prod.id}`}>
+                  <span className="text-[10px] text-gray-400 font-sans uppercase font-bold tracking-wider">Estoque:</span>
+                  <span className={`text-xs font-mono font-bold ${prod.quantity <= (prod.minStock || 0) ? 'text-amber-400' : 'text-brand-neutral'}`}>
+                    {prod.quantity} un
+                  </span>
                 </div>
 
                 {/* Visualizar, Print Tag, Edit & Delete actions */}
@@ -1049,24 +1024,7 @@ export default function InventoryView({
         />
       )}
 
-      {/* Quick Stock Modal (2 big buttons for simple products, or variations list with individual +/- for variant products) */}
-      {quickStockProd && (
-        <QuickStockModal
-          product={quickStockProd}
-          isOpen={!!quickStockProd}
-          onClose={() => setQuickStockProd(null)}
-          onUpdateProduct={(updated) => {
-            onEditProduct(updated);
-            setQuickStockProd(updated);
-            if (detailProd && detailProd.id === updated.id) {
-              setDetailProd(updated);
-            }
-          }}
-          onRecordTransaction={onRecordTransaction}
-          onOpenEdit={(p) => handleOpenEdit(p)}
-          onOpenDetails={(p) => setDetailProd(p)}
-        />
-      )}
+
 
       {/* Product Detail Modal (Visualizar Informações do Produto) */}
       {detailProd && (

@@ -25,7 +25,6 @@ interface DashboardViewProps {
   categories: string[];
   onSelectCategory: (category: CategoryName | 'Todos') => void;
   onNavigateToTab: (tab: string) => void;
-  onOpenQuickOp: (productId?: string, type?: 'entrada' | 'saida') => void;
   onOpenSalesPanel?: (productId?: string) => void;
   onAddCategory: (name: string) => void;
 }
@@ -36,7 +35,6 @@ export default function DashboardView({
   categories,
   onSelectCategory,
   onNavigateToTab,
-  onOpenQuickOp,
   onOpenSalesPanel,
   onAddCategory,
 }: DashboardViewProps) {

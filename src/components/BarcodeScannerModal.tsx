@@ -18,12 +18,13 @@ import {
 import { Product, ProductVariant } from '../types';
 import { playScanBeep } from '../utils/barcodeUtils';
 import BarcodeDisplay from './BarcodeDisplay';
+import { DollarSign } from 'lucide-react';
 
 interface BarcodeScannerModalProps {
   isOpen: boolean;
   onClose: () => void;
   products: Product[];
-  onOpenQuickOp: (productId: string, type: 'entrada' | 'saida') => void;
+  onOpenSalesPanel?: (productId: string, variantId?: string) => void;
   onOpenSmartPanel?: (product: Product) => void;
   onOpenPrintTag?: (product: Product, variant?: ProductVariant) => void;
   onOpenNfce?: (product: Product, variant?: ProductVariant) => void;
@@ -33,7 +34,7 @@ export default function BarcodeScannerModal({
   isOpen,
   onClose,
   products,
-  onOpenQuickOp,
+  onOpenSalesPanel,
   onOpenSmartPanel,
   onOpenPrintTag,
   onOpenNfce,
@@ -44,7 +45,6 @@ export default function BarcodeScannerModal({
   const [lastScannedCode, setLastScannedCode] = useState<string>('');
   const [scanStatusMsg, setScanStatusMsg] = useState<string>('Aguardando leitura do leitor de código de barras USB/Bluetooth...');
   const [isSuccessBeep, setIsSuccessBeep] = useState(false);
-  const [autoOpMode, setAutoOpMode] = useState<'none' | 'saida' | 'entrada'>('none');
 
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -90,7 +90,9 @@ export default function BarcodeScannerModal({
       if (prod.variants) {
         const vMatch = prod.variants.find(
           (v) =>
+            v.code?.toLowerCase() === cleanCode.toLowerCase() ||
             v.sku?.toLowerCase() === cleanCode.toLowerCase() ||
+            v.barcode?.toLowerCase() === cleanCode.toLowerCase() ||
             v.id.toLowerCase() === cleanCode.toLowerCase()
         );
         if (vMatch) {
@@ -105,12 +107,7 @@ export default function BarcodeScannerModal({
       setMatchedProduct(foundProduct);
       setMatchedVariant(foundVariant);
       setIsSuccessBeep(true);
-      setScanStatusMsg(`PRODUTO ENCONTRADO: ${foundProduct.name}${foundVariant ? ` (${foundVariant.name})` : ''}`);
-
-      // Auto operation if autoOpMode is set
-      if (autoOpMode !== 'none') {
-        onOpenQuickOp(foundProduct.id, autoOpMode);
-      }
+      setScanStatusMsg(`PRODUTO ENCONTRADO: ${foundProduct.name}${foundVariant ? ` (${foundVariant.name} - Cód: ${foundVariant.code || foundVariant.sku})` : ''}`);
     } else {
       setMatchedProduct(null);
       setMatchedVariant(null);
@@ -249,46 +246,6 @@ export default function BarcodeScannerModal({
               </div>
             </div>
 
-            {/* Continuous Scan Mode Selector */}
-            <div className="flex items-center justify-between bg-brand-bg/40 p-3 rounded-xl border border-brand-tertiary/60 text-xs">
-              <span className="font-bold text-gray-300">Ação Automática ao Escanear:</span>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setAutoOpMode('none')}
-                  className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition cursor-pointer ${
-                    autoOpMode === 'none'
-                      ? 'bg-brand-primary text-black border-brand-primary'
-                      : 'bg-brand-secondary text-gray-400 border-brand-tertiary'
-                  }`}
-                >
-                  Apenas Mostrar
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAutoOpMode('saida')}
-                  className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition cursor-pointer ${
-                    autoOpMode === 'saida'
-                      ? 'bg-brand-red text-white border-brand-red'
-                      : 'bg-brand-secondary text-gray-400 border-brand-tertiary'
-                  }`}
-                >
-                  ⚡ Auto Venda (-1)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAutoOpMode('entrada')}
-                  className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition cursor-pointer ${
-                    autoOpMode === 'entrada'
-                      ? 'bg-brand-green text-black border-brand-green'
-                      : 'bg-brand-secondary text-gray-400 border-brand-tertiary'
-                  }`}
-                >
-                  ⚡ Auto Reposição (+1)
-                </button>
-              </div>
-            </div>
-
             {/* Scanned Result Card */}
             {matchedProduct ? (
               <motion.div
@@ -309,7 +266,7 @@ export default function BarcodeScannerModal({
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="text-[10px] font-mono font-bold bg-brand-tertiary text-brand-primary px-2 py-0.5 rounded uppercase">
-                          SKU: {matchedVariant?.sku || matchedProduct.sku}
+                          SKU: {matchedVariant?.code || matchedVariant?.sku || matchedProduct.sku}
                         </span>
                         <span className="text-[10px] font-sans bg-brand-bg text-gray-400 px-2 py-0.5 rounded">
                           {matchedProduct.category}
@@ -335,48 +292,28 @@ export default function BarcodeScannerModal({
                   </div>
 
                   <BarcodeDisplay
-                    text={matchedVariant?.sku || matchedProduct.sku}
+                    text={matchedVariant?.code || matchedVariant?.sku || matchedProduct.sku}
                     type="code128"
                     height={35}
                     showText={false}
                   />
                 </div>
 
-                {/* Quick Action buttons for matched product */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-3 border-t border-brand-tertiary/60">
-                  {onOpenNfce && (
+                {/* Direct Action buttons for matched product */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-3 border-t border-brand-tertiary/60">
+                  {onOpenSalesPanel && (
                     <button
                       type="button"
                       onClick={() => {
-                        onOpenNfce(matchedProduct, matchedVariant || undefined);
+                        onOpenSalesPanel(matchedProduct.id, matchedVariant?.id);
+                        onClose();
                       }}
-                      className="col-span-2 sm:col-span-1 py-2.5 px-3 rounded-xl bg-amber-500/20 hover:bg-amber-500/35 border border-amber-500/50 text-amber-300 font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer shadow-md"
+                      className="py-2.5 px-3 rounded-xl bg-gradient-to-r from-[#D4A017] via-[#ffd56d] to-[#C59B27] text-black font-black text-xs flex items-center justify-center gap-1.5 transition cursor-pointer shadow-md hover:brightness-105"
+                      id="scanner-btn-open-sale"
                     >
-                      <Receipt className="w-4 h-4 text-amber-400" /> Nota Fiscal
+                      <DollarSign className="w-4 h-4 stroke-[3]" /> Vender no PDV Express
                     </button>
                   )}
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onOpenQuickOp(matchedProduct.id, 'saida');
-                      onClose();
-                    }}
-                    className="py-2.5 px-3 rounded-xl bg-brand-red/15 hover:bg-brand-red/30 border border-brand-red/40 text-brand-red font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer"
-                  >
-                    <Minus className="w-4 h-4" /> Vender (Saída)
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onOpenQuickOp(matchedProduct.id, 'entrada');
-                      onClose();
-                    }}
-                    className="py-2.5 px-3 rounded-xl bg-brand-green/15 hover:bg-brand-green/30 border border-brand-green/40 text-brand-green font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer"
-                  >
-                    <Plus className="w-4 h-4" /> Repor (Entrada)
-                  </button>
 
                   {onOpenPrintTag && (
                     <button
@@ -386,7 +323,19 @@ export default function BarcodeScannerModal({
                       }}
                       className="py-2.5 px-3 rounded-xl bg-brand-primary/10 hover:bg-brand-primary/25 border border-brand-primary/30 text-brand-primary font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer"
                     >
-                      <Printer className="w-4 h-4" /> Etiqueta
+                      <Printer className="w-4 h-4" /> Imprimir Etiqueta
+                    </button>
+                  )}
+
+                  {onOpenNfce && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onOpenNfce(matchedProduct, matchedVariant || undefined);
+                      }}
+                      className="py-2.5 px-3 rounded-xl bg-amber-500/20 hover:bg-amber-500/35 border border-amber-500/50 text-amber-300 font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer shadow-md"
+                    >
+                      <Receipt className="w-4 h-4 text-amber-400" /> Nota Fiscal (NFC-e)
                     </button>
                   )}
                 </div>

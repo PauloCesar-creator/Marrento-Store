@@ -13,7 +13,8 @@ import {
   User,
   UserCheck,
   Lock,
-  DollarSign
+  DollarSign,
+  Tag
 } from 'lucide-react';
 
 import { Product, Transaction, Notification, CategoryName, ProductVariant, MonthlyClosing } from './types';
@@ -21,10 +22,9 @@ import { INITIAL_PRODUCTS, INITIAL_TRANSACTIONS, SUPPLIERS } from './data';
 
 import DashboardView from './components/DashboardView';
 import InventoryView from './components/InventoryView';
-import EntryFormView from './components/EntryFormView';
+import TagsAdminView from './components/TagsAdminView';
 import ReportsView from './components/ReportsView';
 import NotificationPanel from './components/NotificationPanel';
-import OperationModal from './components/OperationModal';
 import BarcodeScannerModal from './components/BarcodeScannerModal';
 import PrintTagModal from './components/PrintTagModal';
 import PrintReceiptModal from './components/PrintReceiptModal';
@@ -34,6 +34,7 @@ import SalesPanelModal from './components/SalesPanelModal';
 import marrentoLogo from '../assets/img/marrento store logo.jpg';
 import { useBarcodeScanner } from './utils/useBarcodeScanner';
 import { generateUUID } from './utils/uuid';
+import { ensureProductVariantCodes } from './utils/variantCode';
 import { supabase } from './lib/supabase';
 import {
   dbFetchCategories,
@@ -58,7 +59,8 @@ export default function App() {
   // 1. Core Persistent States (with localStorage fallback)
   const [products, setProducts] = useState<Product[]>(() => {
     const saved = localStorage.getItem('marento_products');
-    return saved ? JSON.parse(saved) : INITIAL_PRODUCTS;
+    const prods: Product[] = saved ? JSON.parse(saved) : INITIAL_PRODUCTS;
+    return prods.map(ensureProductVariantCodes);
   });
 
   const [transactions, setTransactions] = useState<Transaction[]>(() => {
@@ -83,7 +85,7 @@ export default function App() {
   });
 
   // 2. Navigation & UI States
-  const [activeTab, setActiveTab] = useState<'Dashboard' | 'Estoque' | 'Entradas' | 'Relatórios'>('Dashboard');
+  const [activeTab, setActiveTab] = useState<'Dashboard' | 'Estoque' | 'Etiquetas' | 'Relatórios'>('Dashboard');
   const [selectedCategory, setSelectedCategory] = useState<CategoryName | 'Todos'>('Todos');
   const [isNotifOpen, setIsNotifOpen] = useState(false);
 
@@ -93,7 +95,7 @@ export default function App() {
   });
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
 
-  const handleTabClick = (tab: 'Dashboard' | 'Estoque' | 'Entradas' | 'Relatórios') => {
+  const handleTabClick = (tab: 'Dashboard' | 'Estoque' | 'Etiquetas' | 'Relatórios') => {
     if (tab === 'Relatórios' && !isAuthenticated) {
       setIsLoginModalOpen(true);
       return;
@@ -115,10 +117,7 @@ export default function App() {
     }
   };
 
-  // 3. Quick Operation & Sales Panel Modal States
-  const [isQuickOpOpen, setIsQuickOpOpen] = useState(false);
-  const [quickOpProductId, setQuickOpProductId] = useState<string | undefined>(undefined);
-  const [quickOpType, setQuickOpType] = useState<'entrada' | 'saida'>('entrada');
+  // 3. Sales Panel Modal States
   const [isSalesPanelOpen, setIsSalesPanelOpen] = useState(false);
   const [salesPanelProductId, setSalesPanelProductId] = useState<string | undefined>(undefined);
 
@@ -642,21 +641,20 @@ export default function App() {
 
   // Handle triggered replenishment from notification button
   const handleTriggerReplenish = (productId: string) => {
-    setQuickOpProductId(productId);
-    setQuickOpType('entrada');
-    setIsQuickOpOpen(true);
+    setActiveTab('Estoque');
     setIsNotifOpen(false);
   };
 
   // 5. Actions / Mutators
   // Add product
   const handleAddProduct = async (newProd: Omit<Product, 'id' | 'salesCount' | 'createdAt'>) => {
-    const product: Product = {
+    const rawProduct: Product = {
       ...newProd,
       id: generateUUID(),
       salesCount: 0,
       createdAt: new Date().toISOString(),
     };
+    const product = ensureProductVariantCodes(rawProduct);
     setProducts((prev) => [product, ...prev]);
 
     // Save product to Supabase silently in backend
@@ -673,11 +671,12 @@ export default function App() {
 
   // Edit product
   const handleEditProduct = async (updatedProd: Product) => {
+    const product = ensureProductVariantCodes(updatedProd);
     setProducts((prev) =>
-      prev.map((p) => (p.id === updatedProd.id ? updatedProd : p))
+      prev.map((p) => (p.id === product.id ? product : p))
     );
     // Save edited product to Supabase silently in backend
-    const res = await dbSaveProduct(updatedProd);
+    const res = await dbSaveProduct(product);
     if (res && !res.success && res.error) {
       console.warn('[Supabase Product Edit Warning]:', res.error);
     }
@@ -769,13 +768,6 @@ export default function App() {
     }
 
     return { success: true, transaction: tx };
-  };
-
-  // Open transaction wizard modal
-  const handleOpenQuickOp = (productId?: string, type?: 'entrada' | 'saida') => {
-    setQuickOpProductId(productId);
-    setQuickOpType(type || 'entrada');
-    setIsQuickOpOpen(true);
   };
 
   // Open Sales Panel (PDV Express)
@@ -942,7 +934,6 @@ export default function App() {
                 categories={categories}
                 onSelectCategory={setSelectedCategory}
                 onNavigateToTab={(tab) => handleTabClick(tab as any)}
-                onOpenQuickOp={handleOpenQuickOp}
                 onOpenSalesPanel={handleOpenSalesPanel}
                 onAddCategory={handleAddCategory}
               />
@@ -953,7 +944,6 @@ export default function App() {
                 products={products}
                 selectedCategory={selectedCategory}
                 onSelectCategory={setSelectedCategory}
-                onOpenQuickOp={handleOpenQuickOp}
                 onDeleteProduct={handleDeleteProduct}
                 onEditProduct={handleEditProduct}
                 onAddProduct={handleAddProduct}
@@ -971,16 +961,10 @@ export default function App() {
               />
             )}
 
-            {activeTab === 'Entradas' && (
-              <EntryFormView
+            {activeTab === 'Etiquetas' && (
+              <TagsAdminView
                 products={products}
-                onAddProduct={handleAddProduct}
-                onRecordTransaction={handleRecordTransaction}
-                transactions={transactions}
-                suppliers={suppliers}
-                onAddSupplier={handleAddSupplier}
                 categories={categories}
-                onAddCategory={handleAddCategory}
               />
             )}
 
@@ -1047,16 +1031,16 @@ export default function App() {
             <span className="text-[10px] font-semibold tracking-wider">Estoque</span>
           </button>
 
-          {/* Entradas Tab */}
+          {/* Etiquetas Tab */}
           <button
-            onClick={() => handleTabClick('Entradas')}
+            onClick={() => handleTabClick('Etiquetas')}
             className={`flex flex-col items-center gap-1 py-1 px-3 text-center transition cursor-pointer group ${
-              activeTab === 'Entradas' ? 'text-brand-primary' : 'text-gray-500 hover:text-brand-neutral'
+              activeTab === 'Etiquetas' ? 'text-brand-primary' : 'text-gray-500 hover:text-brand-neutral'
             }`}
-            id="nav-btn-entradas"
+            id="nav-btn-etiquetas"
           >
-            <ArrowUpRight className="w-5 h-5 transition group-hover:scale-105" />
-            <span className="text-[10px] font-semibold tracking-wider">Entradas</span>
+            <Tag className="w-5 h-5 transition group-hover:scale-105" />
+            <span className="text-[10px] font-semibold tracking-wider">Etiquetas</span>
           </button>
 
           {/* Relatórios Tab */}
@@ -1105,25 +1089,14 @@ export default function App() {
           setNfceVariant(variant || null);
           setIsNfceOpen(true);
         }}
-        onOpenBarcodeScanner={() => setIsScannerOpen(true)}
       />
 
-      {/* 4. Global Action Dialog: Stock Operations */}
-      <OperationModal
-        isOpen={isQuickOpOpen}
-        onClose={() => setIsQuickOpOpen(false)}
-        products={products}
-        initialProductId={quickOpProductId}
-        initialType={quickOpType}
-        onConfirm={handleRecordTransaction}
-      />
-
-      {/* 5. Plug & Play Barcode Scanner Modal */}
+      {/* 4. Plug & Play Barcode Scanner Modal */}
       <BarcodeScannerModal
         isOpen={isScannerOpen}
         onClose={() => setIsScannerOpen(false)}
         products={products}
-        onOpenQuickOp={handleOpenQuickOp}
+        onOpenSalesPanel={handleOpenSalesPanel}
         onOpenPrintTag={handleOpenPrintTag}
         onOpenNfce={handleOpenNfce}
       />

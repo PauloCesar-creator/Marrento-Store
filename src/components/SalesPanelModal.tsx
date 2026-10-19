@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   X,
@@ -23,6 +23,7 @@ import {
   CheckCircle2
 } from 'lucide-react';
 import { Product, ProductVariant, Transaction } from '../types';
+import { playScanBeep } from '../utils/barcodeUtils';
 
 interface SalesPanelModalProps {
   isOpen: boolean;
@@ -43,7 +44,6 @@ interface SalesPanelModalProps {
   ) => Promise<{ success: boolean; transaction?: Transaction }>;
   onOpenPrintReceipt?: (tx: Transaction) => void;
   onOpenNfce?: (product: Product, variant?: ProductVariant) => void;
-  onOpenBarcodeScanner?: () => void;
 }
 
 export default function SalesPanelModal({
@@ -54,7 +54,6 @@ export default function SalesPanelModal({
   onConfirmSale,
   onOpenPrintReceipt,
   onOpenNfce,
-  onOpenBarcodeScanner,
 }: SalesPanelModalProps) {
   const [selectedProductId, setSelectedProductId] = useState<string>('');
   const [selectedVariantId, setSelectedVariantId] = useState<string>('');
@@ -73,6 +72,161 @@ export default function SalesPanelModal({
     total: number;
     transaction?: Transaction;
   } | null>(null);
+
+  // Simple Integrated Bip / Barcode Search states
+  const [isBipActive, setIsBipActive] = useState<boolean>(false);
+  const [bipInput, setBipInput] = useState<string>('');
+  const [bipFeedback, setBipFeedback] = useState<string | null>(null);
+  const bipInputRef = React.useRef<HTMLInputElement>(null);
+
+  // Auto-focus bip input when Bip mode becomes active
+  useEffect(() => {
+    if (isBipActive) {
+      setTimeout(() => {
+        bipInputRef.current?.focus();
+      }, 50);
+    }
+  }, [isBipActive]);
+
+  // Fast barcode / SKU / Unique code lookup strictly inside this modal
+  const handleProcessBipScan = (codeToSearch: string) => {
+    const cleanCode = codeToSearch.trim();
+    if (!cleanCode) return;
+
+    let foundProduct: Product | null = null;
+    let foundVariant: ProductVariant | null = null;
+
+    for (const prod of products) {
+      // 1. Direct match on parent product
+      if (
+        prod.sku.toLowerCase() === cleanCode.toLowerCase() ||
+        prod.id.toLowerCase() === cleanCode.toLowerCase() ||
+        prod.name.toLowerCase() === cleanCode.toLowerCase()
+      ) {
+        foundProduct = prod;
+        break;
+      }
+
+      // 2. Direct match on variation unique code, SKU, or barcode
+      if (prod.variants) {
+        const vMatch = prod.variants.find(
+          (v) =>
+            v.code?.toLowerCase() === cleanCode.toLowerCase() ||
+            v.sku?.toLowerCase() === cleanCode.toLowerCase() ||
+            v.barcode?.toLowerCase() === cleanCode.toLowerCase() ||
+            v.id.toLowerCase() === cleanCode.toLowerCase()
+        );
+        if (vMatch) {
+          foundProduct = prod;
+          foundVariant = vMatch;
+          break;
+        }
+      }
+    }
+
+    // Fallback: search by partial name
+    if (!foundProduct) {
+      for (const prod of products) {
+        if (prod.name.toLowerCase().includes(cleanCode.toLowerCase())) {
+          foundProduct = prod;
+          break;
+        }
+        if (prod.variants) {
+          const vMatch = prod.variants.find((v) =>
+            v.name.toLowerCase().includes(cleanCode.toLowerCase())
+          );
+          if (vMatch) {
+            foundProduct = prod;
+            foundVariant = vMatch;
+            break;
+          }
+        }
+      }
+    }
+
+    if (foundProduct) {
+      playScanBeep(1200, 0.15);
+      setSelectedProductId(foundProduct.id);
+      setUnitPrice(foundProduct.price || 0);
+
+      if (foundVariant) {
+        setSelectedVariantId(foundVariant.id);
+      } else if (foundProduct.variants && foundProduct.variants.length > 0) {
+        setSelectedVariantId(foundProduct.variants[0].id);
+      } else {
+        setSelectedVariantId('');
+      }
+
+      // If the exact same item is scanned again, increment quantity
+      if (
+        selectedProductId === foundProduct.id &&
+        (!foundVariant || selectedVariantId === foundVariant.id)
+      ) {
+        setQuantity((prev) => prev + 1);
+      } else {
+        setQuantity(1);
+      }
+
+      setBipFeedback(`✓ Item selecionado: ${foundProduct.name}${foundVariant ? ` (${foundVariant.name})` : ''}`);
+      setTimeout(() => setBipFeedback(null), 3000);
+      setBipInput('');
+      setSearchTerm('');
+      setIsSearching(false);
+      setError('');
+    } else {
+      setBipFeedback(`Nenhuma peça encontrada para "${cleanCode}"`);
+      setTimeout(() => setBipFeedback(null), 3000);
+    }
+  };
+
+  // Live matches for BIP panel input
+  const bipMatches = useMemo(() => {
+    const q = bipInput.trim().toLowerCase();
+    if (!q) return [];
+    const results: { product: Product; variant?: ProductVariant; matchLabel: string }[] = [];
+
+    for (const prod of products) {
+      if (
+        prod.sku.toLowerCase().includes(q) ||
+        prod.name.toLowerCase().includes(q) ||
+        prod.category.toLowerCase().includes(q)
+      ) {
+        results.push({ product: prod, matchLabel: prod.sku });
+      }
+
+      if (prod.variants) {
+        for (const v of prod.variants) {
+          if (
+            v.code?.toLowerCase().includes(q) ||
+            v.sku?.toLowerCase().includes(q) ||
+            v.barcode?.toLowerCase().includes(q) ||
+            v.name.toLowerCase().includes(q)
+          ) {
+            results.push({ product: prod, variant: v, matchLabel: v.code || v.sku || v.name });
+          }
+        }
+      }
+    }
+    return results.slice(0, 6);
+  }, [bipInput, products]);
+
+  const handleSelectBipMatch = (prod: Product, variant?: ProductVariant) => {
+    playScanBeep(1200, 0.15);
+    setSelectedProductId(prod.id);
+    setUnitPrice(prod.price || 0);
+    if (variant) {
+      setSelectedVariantId(variant.id);
+    } else if (prod.variants && prod.variants.length > 0) {
+      setSelectedVariantId(prod.variants[0].id);
+    } else {
+      setSelectedVariantId('');
+    }
+    setBipFeedback(`✓ Item selecionado: ${prod.name}${variant ? ` (${variant.name})` : ''}`);
+    setTimeout(() => setBipFeedback(null), 3000);
+    setBipInput('');
+    setIsBipActive(false);
+    setError('');
+  };
 
   // Initialize or reset when modal opens
   useEffect(() => {
@@ -369,18 +523,136 @@ export default function SalesPanelModal({
             /* SALE FORM */
             <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4 overflow-y-auto flex-1">
               {/* Search & Barcode Bar */}
-              <div className="space-y-1.5">
+              <div className="space-y-2">
+                {/* Simple Integrated Bip / Barcode Search Panel */}
+                {isBipActive && (
+                  <div className="p-3.5 rounded-2xl bg-[#161618] border border-[#D4A017]/40 space-y-2.5 shadow-2xl animate-fadeIn" id="sales-bip-active-panel">
+                    <div className="flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2 text-[#ffd56d] font-bold">
+                        <Barcode className="w-4 h-4 text-[#D4A017]" />
+                        <span>Leitor de Código de Barras & Busca Rápida</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsBipActive(false);
+                          setBipInput('');
+                        }}
+                        className="text-[11px] text-gray-400 hover:text-white px-2 py-0.5 rounded-lg bg-black/50 border border-white/10 cursor-pointer transition"
+                      >
+                        ✕ Fechar Bip
+                      </button>
+                    </div>
+
+                    <div className="relative">
+                      <input
+                        ref={bipInputRef}
+                        type="text"
+                        placeholder="Aponte o leitor de código de barras ou digite o código/SKU e tecle Enter..."
+                        value={bipInput}
+                        onChange={(e) => setBipInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleProcessBipScan(bipInput);
+                          }
+                        }}
+                        className="w-full bg-black/90 border-2 border-[#D4A017]/70 rounded-xl px-3.5 py-2.5 text-xs font-mono font-bold text-[#ffd56d] placeholder-gray-500 focus:outline-none focus:border-[#ffd56d] focus:ring-1 focus:ring-[#ffd56d]/50 shadow-inner"
+                        id="sales-bip-direct-input"
+                        autoFocus
+                      />
+                      {bipInput && (
+                        <button
+                          type="button"
+                          onClick={() => setBipInput('')}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white text-xs"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Instant Live Matches within BIP Panel */}
+                    {bipMatches.length > 0 && (
+                      <div className="bg-black/70 border border-white/10 rounded-xl p-1.5 space-y-1 max-h-44 overflow-y-auto" id="sales-bip-matches-list">
+                        <p className="text-[10px] text-gray-400 px-2 pt-1 font-sans">
+                          Resultados encontrados (clique para selecionar):
+                        </p>
+                        {bipMatches.map((m, idx) => (
+                          <button
+                            key={`bip-match-${m.product.id}-${m.variant?.id || 'base'}-${idx}`}
+                            type="button"
+                            onClick={() => handleSelectBipMatch(m.product, m.variant)}
+                            className="w-full flex items-center justify-between p-2 rounded-lg bg-[#1a1a1c] hover:bg-[#27272a] text-left text-xs transition cursor-pointer border border-white/5 hover:border-[#ffd56d]/40 group"
+                          >
+                            <div className="flex items-center gap-2.5 truncate">
+                              <img
+                                src={m.variant?.imageUrl || m.product.imageUrl}
+                                alt={m.product.name}
+                                className="w-8 h-8 rounded-lg object-cover shrink-0 border border-white/10"
+                              />
+                              <div className="truncate">
+                                <p className="font-bold text-white group-hover:text-[#ffd56d] transition truncate">
+                                  {m.product.name}
+                                </p>
+                                <div className="flex items-center gap-1.5 text-[10px] text-gray-400">
+                                  {m.variant && (
+                                    <span className="text-[#ffd56d] font-bold">
+                                      {m.variant.name}
+                                    </span>
+                                  )}
+                                  <span className="font-mono text-gray-500">
+                                    Cód: {m.variant?.code || m.variant?.sku || m.product.sku}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="text-right shrink-0 pl-2">
+                              <span className="font-serif font-bold text-[#ffd56d] text-xs">
+                                {formatBRL(m.product.price)}
+                              </span>
+                              <span className="block text-[9px] text-gray-400 font-mono">
+                                {m.variant ? m.variant.quantity : m.product.quantity} un
+                              </span>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Bip Feedback Toast */}
+                {bipFeedback && (
+                  <div
+                    className={`p-2.5 rounded-xl text-xs font-bold flex items-center gap-2 ${
+                      bipFeedback.startsWith('✓')
+                        ? 'bg-emerald-950/60 border border-emerald-500/40 text-emerald-300'
+                        : 'bg-rose-950/60 border border-rose-500/40 text-rose-300'
+                    }`}
+                  >
+                    <CheckCircle2 className="w-4 h-4 shrink-0" />
+                    <span>{bipFeedback}</span>
+                  </div>
+                )}
+
                 <div className="flex items-center gap-2">
                   <div className="relative flex-1">
                     <Search className="w-4 h-4 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2" />
                     <input
                       type="text"
-                      placeholder="Buscar peça por nome, SKU..."
+                      placeholder="Buscar peça por nome, SKU, variação..."
                       value={searchTerm}
                       onFocus={() => setIsSearching(true)}
                       onChange={(e) => {
                         setSearchTerm(e.target.value);
                         setIsSearching(true);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleProcessBipScan(searchTerm);
+                        }
                       }}
                       className="w-full bg-[#18181b] border border-white/10 rounded-xl pl-9 pr-3 py-2.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-[#ffd56d]"
                       id="sales-search-input"
@@ -399,18 +671,23 @@ export default function SalesPanelModal({
                     )}
                   </div>
 
-                  {onOpenBarcodeScanner && (
-                    <button
-                      type="button"
-                      onClick={() => onOpenBarcodeScanner()}
-                      className="shrink-0 px-3 py-2.5 rounded-xl bg-[#1f1f23] hover:bg-[#27272a] text-[#ffd56d] border border-[#ffd56d]/30 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
-                      title="Escanear Código de Barras"
-                      id="sales-btn-barcode-scan"
-                    >
-                      <Barcode className="w-4 h-4" />
-                      <span>Bipar</span>
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsBipActive((prev) => !prev);
+                      setIsSearching(false);
+                    }}
+                    className={`shrink-0 px-3 py-2.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
+                      isBipActive
+                        ? 'bg-amber-400 text-black border-amber-400 shadow-md font-black'
+                        : 'bg-[#1f1f23] hover:bg-[#27272a] text-[#ffd56d] border-[#ffd56d]/30'
+                    }`}
+                    title="Alternar Leitor de Código de Barras (Bipar)"
+                    id="sales-btn-barcode-scan"
+                  >
+                    <Barcode className="w-4 h-4" />
+                    <span>{isBipActive ? 'Bipando...' : 'Bipar'}</span>
+                  </button>
                 </div>
 
                 {/* Search Results Dropdown */}

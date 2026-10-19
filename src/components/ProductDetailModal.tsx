@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { Product, ProductVariant } from '../types';
 import { generateUUID } from '../utils/uuid';
+import { generateVariantCode, generateVariantBarcode } from '../utils/variantCode';
 
 interface ProductDetailModalProps {
   product: Product | null;
@@ -105,17 +106,21 @@ export default function ProductDetailModal({
 
   const handleAddNewVariant = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newVarName.trim() || !onUpdateProduct) return;
+    const trimmedName = newVarName.trim();
+    const uniqueCode = generateVariantCode(product.sku, variants.length, trimmedName, variants);
+    const uniqueBarcode = generateVariantBarcode(product.sku, variants.length, trimmedName);
 
     const newVar: ProductVariant = {
       id: generateUUID(),
-      name: newVarName.trim(),
+      name: trimmedName,
       quantity: Math.max(0, newVarQty),
       imageUrl:
         newVarImage.trim() ||
         product.imageUrl ||
         'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?auto=format&fit=crop&w=600&q=80',
-      sku: `${product.sku}-${newVarName.slice(0, 3).toUpperCase()}`,
+      sku: uniqueCode,
+      code: uniqueCode,
+      barcode: uniqueBarcode,
     };
 
     const updatedVariants = [...variants, newVar];
@@ -328,9 +333,15 @@ export default function ProductDetailModal({
                           <p className="text-xs font-bold text-white truncate max-w-[85px]">
                             {v.name}
                           </p>
-                          <span className={`text-[10px] font-mono ${isSelected ? 'text-[#ffd56d] font-bold' : 'text-[#8E8E93]'}`}>
-                            {v.quantity} un
-                          </span>
+                          <div className="flex items-center gap-1">
+                            <span className="text-[9px] font-mono text-amber-400 font-bold truncate max-w-[70px]">
+                              {v.code || v.sku || 'VAR'}
+                            </span>
+                            <span className="text-[9px] text-[#8E8E93]">&bull;</span>
+                            <span className={`text-[10px] font-mono ${isSelected ? 'text-[#ffd56d] font-bold' : 'text-[#8E8E93]'}`}>
+                              {v.quantity} un
+                            </span>
+                          </div>
                         </div>
                       </div>
 

@@ -12,6 +12,8 @@ export interface ProductVariant {
   quantity: number;
   imageUrl?: string;
   sku?: string;
+  code?: string; // Código único legível para identificação (ex: SK-842-RE-V01)
+  barcode?: string; // Código de barras para leitura ótica
 }
 
 export interface Product {
