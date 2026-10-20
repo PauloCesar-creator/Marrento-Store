@@ -30,6 +30,7 @@ interface SalesPanelModalProps {
   onClose: () => void;
   products: Product[];
   initialProductId?: string;
+  initialVariantId?: string;
   onConfirmSale: (
     productId: string,
     quantity: number,
@@ -51,12 +52,14 @@ export default function SalesPanelModal({
   onClose,
   products,
   initialProductId,
+  initialVariantId,
   onConfirmSale,
   onOpenPrintReceipt,
   onOpenNfce,
 }: SalesPanelModalProps) {
   const [selectedProductId, setSelectedProductId] = useState<string>('');
   const [selectedVariantId, setSelectedVariantId] = useState<string>('');
+  const [isVariantLocked, setIsVariantLocked] = useState<boolean>(false);
   const [quantity, setQuantity] = useState<number>(1);
   const [unitPrice, setUnitPrice] = useState<number>(0);
   const [discount, setDiscount] = useState<number>(0);
@@ -89,6 +92,7 @@ export default function SalesPanelModal({
   }, [isBipActive]);
 
   // Fast barcode / SKU / Unique code lookup strictly inside this modal
+  // Prioritizes variation barcodes / unique codes FIRST so scanning a variant shows only that variant!
   const handleProcessBipScan = (codeToSearch: string) => {
     const cleanCode = codeToSearch.trim();
     if (!cleanCode) return;
@@ -96,25 +100,15 @@ export default function SalesPanelModal({
     let foundProduct: Product | null = null;
     let foundVariant: ProductVariant | null = null;
 
+    // 1. DIRECT EXACT MATCH ON VARIATION BARCODE, UNIQUE CODE, SKU OR ID FIRST
     for (const prod of products) {
-      // 1. Direct match on parent product
-      if (
-        prod.sku.toLowerCase() === cleanCode.toLowerCase() ||
-        prod.id.toLowerCase() === cleanCode.toLowerCase() ||
-        prod.name.toLowerCase() === cleanCode.toLowerCase()
-      ) {
-        foundProduct = prod;
-        break;
-      }
-
-      // 2. Direct match on variation unique code, SKU, or barcode
-      if (prod.variants) {
+      if (prod.variants && prod.variants.length > 0) {
         const vMatch = prod.variants.find(
           (v) =>
-            v.code?.toLowerCase() === cleanCode.toLowerCase() ||
-            v.sku?.toLowerCase() === cleanCode.toLowerCase() ||
-            v.barcode?.toLowerCase() === cleanCode.toLowerCase() ||
-            v.id.toLowerCase() === cleanCode.toLowerCase()
+            v.barcode?.trim().toLowerCase() === cleanCode.toLowerCase() ||
+            v.code?.trim().toLowerCase() === cleanCode.toLowerCase() ||
+            v.sku?.trim().toLowerCase() === cleanCode.toLowerCase() ||
+            v.id.trim().toLowerCase() === cleanCode.toLowerCase()
         );
         if (vMatch) {
           foundProduct = prod;
@@ -124,13 +118,23 @@ export default function SalesPanelModal({
       }
     }
 
-    // Fallback: search by partial name
+    // 2. Direct match on parent product
     if (!foundProduct) {
       for (const prod of products) {
-        if (prod.name.toLowerCase().includes(cleanCode.toLowerCase())) {
+        if (
+          prod.sku.toLowerCase() === cleanCode.toLowerCase() ||
+          prod.id.toLowerCase() === cleanCode.toLowerCase() ||
+          prod.name.toLowerCase() === cleanCode.toLowerCase()
+        ) {
           foundProduct = prod;
           break;
         }
+      }
+    }
+
+    // 3. Fallback: match by partial variation name or product name
+    if (!foundProduct) {
+      for (const prod of products) {
         if (prod.variants) {
           const vMatch = prod.variants.find((v) =>
             v.name.toLowerCase().includes(cleanCode.toLowerCase())
@@ -141,20 +145,27 @@ export default function SalesPanelModal({
             break;
           }
         }
+        if (prod.name.toLowerCase().includes(cleanCode.toLowerCase())) {
+          foundProduct = prod;
+          break;
+        }
       }
     }
 
     if (foundProduct) {
-      playScanBeep(1200, 0.15);
+      playScanBeep(foundVariant ? 1500 : 1200, 0.15);
       setSelectedProductId(foundProduct.id);
       setUnitPrice(foundProduct.price || 0);
 
       if (foundVariant) {
         setSelectedVariantId(foundVariant.id);
+        setIsVariantLocked(true); // Exclusively lock to scanned variation!
       } else if (foundProduct.variants && foundProduct.variants.length > 0) {
         setSelectedVariantId(foundProduct.variants[0].id);
+        setIsVariantLocked(false);
       } else {
         setSelectedVariantId('');
+        setIsVariantLocked(false);
       }
 
       // If the exact same item is scanned again, increment quantity
@@ -167,7 +178,7 @@ export default function SalesPanelModal({
         setQuantity(1);
       }
 
-      setBipFeedback(`✓ Item selecionado: ${foundProduct.name}${foundVariant ? ` (${foundVariant.name})` : ''}`);
+      setBipFeedback(`✓ Item selecionado: ${foundProduct.name}${foundVariant ? ` - ${foundVariant.name}` : ''}`);
       setTimeout(() => setBipFeedback(null), 3000);
       setBipInput('');
       setSearchTerm('');
@@ -185,15 +196,8 @@ export default function SalesPanelModal({
     if (!q) return [];
     const results: { product: Product; variant?: ProductVariant; matchLabel: string }[] = [];
 
+    // Prioritize variation matches
     for (const prod of products) {
-      if (
-        prod.sku.toLowerCase().includes(q) ||
-        prod.name.toLowerCase().includes(q) ||
-        prod.category.toLowerCase().includes(q)
-      ) {
-        results.push({ product: prod, matchLabel: prod.sku });
-      }
-
       if (prod.variants) {
         for (const v of prod.variants) {
           if (
@@ -202,26 +206,40 @@ export default function SalesPanelModal({
             v.barcode?.toLowerCase().includes(q) ||
             v.name.toLowerCase().includes(q)
           ) {
-            results.push({ product: prod, variant: v, matchLabel: v.code || v.sku || v.name });
+            results.push({ product: prod, variant: v, matchLabel: v.code || v.barcode || v.sku || v.name });
           }
         }
+      }
+    }
+
+    // Then parent products
+    for (const prod of products) {
+      if (
+        prod.sku.toLowerCase().includes(q) ||
+        prod.name.toLowerCase().includes(q) ||
+        prod.category.toLowerCase().includes(q)
+      ) {
+        results.push({ product: prod, matchLabel: prod.sku });
       }
     }
     return results.slice(0, 6);
   }, [bipInput, products]);
 
   const handleSelectBipMatch = (prod: Product, variant?: ProductVariant) => {
-    playScanBeep(1200, 0.15);
+    playScanBeep(variant ? 1500 : 1200, 0.15);
     setSelectedProductId(prod.id);
     setUnitPrice(prod.price || 0);
     if (variant) {
       setSelectedVariantId(variant.id);
+      setIsVariantLocked(true);
     } else if (prod.variants && prod.variants.length > 0) {
       setSelectedVariantId(prod.variants[0].id);
+      setIsVariantLocked(false);
     } else {
       setSelectedVariantId('');
+      setIsVariantLocked(false);
     }
-    setBipFeedback(`✓ Item selecionado: ${prod.name}${variant ? ` (${variant.name})` : ''}`);
+    setBipFeedback(`✓ Item selecionado: ${prod.name}${variant ? ` - ${variant.name}` : ''}`);
     setTimeout(() => setBipFeedback(null), 3000);
     setBipInput('');
     setIsBipActive(false);
@@ -240,11 +258,18 @@ export default function SalesPanelModal({
 
       if (initialProductId) {
         setSelectedProductId(initialProductId);
+        if (initialVariantId) {
+          setSelectedVariantId(initialVariantId);
+          setIsVariantLocked(true);
+        } else {
+          setIsVariantLocked(false);
+        }
       } else if (products.length > 0 && !selectedProductId) {
         setSelectedProductId(products[0].id);
+        setIsVariantLocked(false);
       }
     }
-  }, [isOpen, initialProductId]);
+  }, [isOpen, initialProductId, initialVariantId]);
 
   // Update selected product and default price/variant
   useEffect(() => {
@@ -252,12 +277,15 @@ export default function SalesPanelModal({
     if (prod) {
       setUnitPrice(prod.price || 0);
       if (prod.variants && prod.variants.length > 0) {
-        setSelectedVariantId(prod.variants[0].id);
+        const hasValidVariant = prod.variants.some((v) => v.id === selectedVariantId);
+        if (!hasValidVariant) {
+          setSelectedVariantId(prod.variants[0].id);
+        }
       } else {
         setSelectedVariantId('');
+        setIsVariantLocked(false);
       }
     }
-    setError('');
   }, [selectedProductId, products]);
 
   if (!isOpen) return null;
@@ -299,6 +327,7 @@ export default function SalesPanelModal({
     } else {
       setSelectedVariantId('');
     }
+    setIsVariantLocked(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -366,6 +395,7 @@ export default function SalesPanelModal({
     setDiscount(0);
     setCustomerName('');
     setError('');
+    setIsVariantLocked(false);
   };
 
   return (
@@ -743,8 +773,8 @@ export default function SalesPanelModal({
                   <div className="flex items-start gap-3">
                     <div className="w-16 h-16 rounded-xl overflow-hidden bg-black shrink-0 border border-white/10 relative">
                       <img
-                        src={selectedProduct.imageUrl || 'https://images.unsplash.com/photo-1614162692292-7ac56d7f7f1e?auto=format&fit=crop&w=600&q=80'}
-                        alt={selectedProduct.name}
+                        src={selectedVariant?.imageUrl || selectedProduct.imageUrl || 'https://images.unsplash.com/photo-1614162692292-7ac56d7f7f1e?auto=format&fit=crop&w=600&q=80'}
+                        alt={selectedVariant?.name || selectedProduct.name}
                         className="w-full h-full object-cover"
                       />
                     </div>
@@ -752,20 +782,27 @@ export default function SalesPanelModal({
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between">
                         <span className="text-[10px] font-mono text-gray-400">
-                          {selectedProduct.sku}
+                          {selectedVariant?.code || selectedVariant?.barcode || selectedVariant?.sku || selectedProduct.sku}
                         </span>
                         <span className={`px-2 py-0.5 rounded-full text-[9px] font-mono font-bold ${
                           currentStock <= selectedProduct.minStock
                             ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
                             : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
                         }`}>
-                          {currentStock} un em estoque
+                          {currentStock} un em estoque {selectedVariant ? '(variação)' : ''}
                         </span>
                       </div>
 
-                      <h3 className="font-serif font-bold text-sm text-white truncate mt-0.5">
-                        {selectedProduct.name}
-                      </h3>
+                      <div className="mt-0.5 flex items-center gap-1.5 flex-wrap">
+                        <h3 className="font-serif font-bold text-sm text-white truncate">
+                          {selectedProduct.name}
+                        </h3>
+                        {selectedVariant && (
+                          <span className="shrink-0 px-2 py-0.5 rounded-lg bg-gradient-to-r from-[#D4A017] to-[#ffd56d] text-black font-sans font-black text-xs shadow-sm">
+                            {selectedVariant.name}
+                          </span>
+                        )}
+                      </div>
                       <p className="text-[10px] text-gray-400">
                         {selectedProduct.category} &bull; Fornecedor: {selectedProduct.supplier}
                       </p>
@@ -782,27 +819,55 @@ export default function SalesPanelModal({
                   {/* VARIATIONS SELECTOR (If product has variants) */}
                   {variants.length > 0 && (
                     <div className="pt-2 border-t border-white/5 space-y-1.5" id="sales-variants-container">
-                      <label className="text-[11px] font-bold text-[#ffd56d] uppercase tracking-wider flex items-center gap-1">
-                        <Sparkles className="w-3.5 h-3.5" />
-                        Selecione a Variação / Cor:
-                      </label>
-                      <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
-                        {variants.map((v) => (
+                      {isVariantLocked && selectedVariant ? (
+                        <div className="flex items-center justify-between bg-black/60 p-2.5 rounded-xl border border-[#D4A017]/40 shadow-inner" id="sales-variant-locked-badge">
+                          <div className="flex items-center gap-2">
+                            <Sparkles className="w-4 h-4 text-[#ffd56d] shrink-0" />
+                            <div>
+                              <span className="text-[10px] uppercase font-bold text-gray-400 block leading-tight">
+                                Variação Bipada Exclusiva:
+                              </span>
+                              <span className="text-xs font-bold text-[#ffd56d] font-sans">
+                                {selectedVariant.name}
+                              </span>
+                            </div>
+                          </div>
                           <button
-                            key={v.id}
                             type="button"
-                            onClick={() => setSelectedVariantId(v.id)}
-                            className={`px-3 py-1.5 rounded-xl text-xs font-sans font-bold transition flex items-center gap-1.5 cursor-pointer ${
-                              selectedVariantId === v.id
-                                ? 'bg-gradient-to-r from-[#D4A017] to-[#ffd56d] text-black shadow-md font-extrabold'
-                                : 'bg-[#1C1C1E] border border-white/10 text-gray-300 hover:text-white'
-                            }`}
+                            onClick={() => setIsVariantLocked(false)}
+                            className="text-[10px] text-gray-400 hover:text-[#ffd56d] underline cursor-pointer transition font-medium"
                           >
-                            <span>{v.name}</span>
-                            <span className="text-[10px] opacity-75 font-mono">({v.quantity} un)</span>
+                            Trocar variação
                           </button>
-                        ))}
-                      </div>
+                        </div>
+                      ) : (
+                        <>
+                          <label className="text-[11px] font-bold text-[#ffd56d] uppercase tracking-wider flex items-center gap-1">
+                            <Sparkles className="w-3.5 h-3.5" />
+                            Selecione a Variação / Cor:
+                          </label>
+                          <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
+                            {variants.map((v) => (
+                              <button
+                                key={v.id}
+                                type="button"
+                                onClick={() => {
+                                  setSelectedVariantId(v.id);
+                                  setIsVariantLocked(true);
+                                }}
+                                className={`px-3 py-1.5 rounded-xl text-xs font-sans font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                                  selectedVariantId === v.id
+                                    ? 'bg-gradient-to-r from-[#D4A017] to-[#ffd56d] text-black shadow-md font-extrabold'
+                                    : 'bg-[#1C1C1E] border border-white/10 text-gray-300 hover:text-white'
+                                }`}
+                              >
+                                <span>{v.name}</span>
+                                <span className="text-[10px] opacity-75 font-mono">({v.quantity} un)</span>
+                              </button>
+                            ))}
+                          </div>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>

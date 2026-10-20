@@ -279,7 +279,7 @@ export default function ReportsView({
       ? ['SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB', 'DOM']
       : ['Semana 1', 'Semana 2', 'Semana 3', 'Semana 4'];
 
-  const baseValue = faturamentoPeriodo > 0 ? faturamentoPeriodo : 10000;
+  const baseValue = faturamentoPeriodo > 0 ? faturamentoPeriodo : 0;
   const chartFactors =
     activeRange === 'Hoje'
       ? [0.1, 0.25, 0.4, 0.35, 0.6, 0.8, 1.0]
@@ -287,8 +287,8 @@ export default function ReportsView({
       ? [0.3, 0.5, 0.45, 0.7, 0.65, 0.85, 1.0]
       : [0.4, 0.6, 0.85, 1.0];
 
-  const chartValues = chartFactors.map((f) => baseValue * f);
-  const maxValue = Math.max(...chartValues, 1000);
+  const chartValues = faturamentoPeriodo > 0 ? chartFactors.map((f) => baseValue * f) : chartFactors.map(() => 0);
+  const maxValue = faturamentoPeriodo > 0 ? Math.max(...chartValues, 1000) : 1000;
 
   const svgWidth = 500;
   const svgHeight = 120;
@@ -807,28 +807,52 @@ Fim do Relatório - Marento Store Luxury Control
             <line x1="0" y1={svgHeight / 2} x2={svgWidth} y2={svgHeight / 2} stroke="#262626" strokeWidth="0.5" strokeDasharray="3 3" />
             <line x1="0" y1={svgHeight - padding} x2={svgWidth} y2={svgHeight - padding} stroke="#262626" strokeWidth="0.5" />
 
-            <path d={areaPath} fill="url(#goldGradient)" />
-
-            <path
-              d={linePath}
-              fill="none"
-              stroke="#D4AF37"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-            />
-
-            {points.map((pt, idx) => (
-              <circle
-                key={`rpt-pt-${idx}`}
-                cx={pt.x}
-                cy={pt.y}
-                r={idx === points.length - 1 ? "4" : "2.5"}
-                fill={idx === points.length - 1 ? "#D4AF37" : "#0E0E0C"}
+            {faturamentoPeriodo > 0 ? (
+              <>
+                <path d={areaPath} fill="url(#goldGradient)" />
+                <path
+                  d={linePath}
+                  fill="none"
+                  stroke="#D4AF37"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                />
+                {points.map((pt, idx) => (
+                  <circle
+                    key={`rpt-pt-${idx}`}
+                    cx={pt.x}
+                    cy={pt.y}
+                    r={idx === points.length - 1 ? "4" : "2.5"}
+                    fill={idx === points.length - 1 ? "#D4AF37" : "#0E0E0C"}
+                    stroke="#D4AF37"
+                    strokeWidth={idx === points.length - 1 ? "2.5" : "1.5"}
+                  />
+                ))}
+              </>
+            ) : (
+              <line
+                x1={padding}
+                y1={svgHeight - padding}
+                x2={svgWidth - padding}
+                y2={svgHeight - padding}
                 stroke="#D4AF37"
-                strokeWidth={idx === points.length - 1 ? "2.5" : "1.5"}
+                strokeWidth="1.5"
+                strokeDasharray="4 4"
+                opacity="0.4"
               />
-            ))}
+            )}
           </svg>
+
+          {faturamentoPeriodo === 0 && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center p-2">
+              <span className="text-xs font-serif font-bold text-gray-400">
+                Relatório Zerado
+              </span>
+              <span className="text-[10px] text-gray-500 font-sans mt-0.5">
+                Nenhuma venda registrada no período ({activeRange}). O ciclo está limpo para novas vendas.
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Chart X Axis */}

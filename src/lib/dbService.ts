@@ -368,12 +368,13 @@ export async function dbFetchTransactions(): Promise<Transaction[]> {
     }
 
     return data.map((t) => {
-      // Calculate robust timestamp
-      let timestamp = Date.now();
+      // Calculate robust deterministic timestamp (never Date.now() to prevent false post-reset resurgence)
+      let timestamp = 0;
       if (t.created_at) {
         const parsed = new Date(t.created_at).getTime();
         if (!isNaN(parsed) && parsed > 0) timestamp = parsed;
-      } else if (t.date) {
+      }
+      if (!timestamp && t.date) {
         const dateParts = t.date.includes('-') ? t.date.split('-') : t.date.split('/');
         if (dateParts.length === 3) {
           const y = Number(dateParts[0].length === 4 ? dateParts[0] : dateParts[2]);
@@ -389,6 +390,7 @@ export async function dbFetchTransactions(): Promise<Transaction[]> {
           if (!isNaN(dt.getTime())) timestamp = dt.getTime();
         }
       }
+      if (!timestamp) timestamp = 0;
 
       return {
         id: t.id,
@@ -436,6 +438,7 @@ export async function dbSaveTransaction(tx: Transaction): Promise<{ success: boo
       price: tx.price,
       date: tx.date || new Date().toISOString().split('T')[0],
       time: tx.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      created_at: new Date().toISOString(),
     };
 
     if (UUID_REGEX.test(tx.id)) {
@@ -465,14 +468,19 @@ export async function dbSaveTransaction(tx: Transaction): Promise<{ success: boo
 
 export async function dbClearTransactions(): Promise<boolean> {
   try {
-    const { error } = await supabase
-      .from('transactions')
-      .delete()
-      .gte('created_at', '1970-01-01T00:00:00Z');
+    // 1. Direct blanket delete strategies for safety
+    await supabase.from('transactions').delete().gte('quantity', 0);
+    await supabase.from('transactions').delete().not('id', 'is', null);
+    await supabase.from('transactions').delete().neq('id', '00000000-0000-0000-0000-000000000000');
 
-    if (error) {
-      console.warn('Could not clear transactions from Supabase:', error.message);
-      return false;
+    // 2. Fetch all transaction IDs to delete explicitly by array
+    const { data: allTxs } = await supabase.from('transactions').select('id');
+    if (allTxs && allTxs.length > 0) {
+      const ids = allTxs.map((t) => t.id).filter(Boolean);
+      for (let i = 0; i < ids.length; i += 50) {
+        const chunk = ids.slice(i, i + 50);
+        await supabase.from('transactions').delete().in('id', chunk);
+      }
     }
     return true;
   } catch (err) {
@@ -483,15 +491,15 @@ export async function dbClearTransactions(): Promise<boolean> {
 
 export async function dbResetProductsSalesCount(): Promise<boolean> {
   try {
-    const { error } = await supabase
-      .from('products')
-      .update({ sales_count: 0 })
-      .gte('created_at', '1970-01-01T00:00:00Z');
-
-    if (error) {
-      console.warn('Could not reset sales_count in Supabase:', error.message);
-      return false;
+    const { data: allProds } = await supabase.from('products').select('id');
+    if (allProds && allProds.length > 0) {
+      const ids = allProds.map((p) => p.id).filter(Boolean);
+      for (let i = 0; i < ids.length; i += 80) {
+        const chunk = ids.slice(i, i + 80);
+        await supabase.from('products').update({ sales_count: 0 }).in('id', chunk);
+      }
     }
+    await supabase.from('products').update({ sales_count: 0 }).not('id', 'is', null);
     return true;
   } catch (err) {
     console.error('Error resetting sales_count in Supabase:', err);

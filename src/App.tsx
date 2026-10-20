@@ -120,6 +120,7 @@ export default function App() {
   // 3. Sales Panel Modal States
   const [isSalesPanelOpen, setIsSalesPanelOpen] = useState(false);
   const [salesPanelProductId, setSalesPanelProductId] = useState<string | undefined>(undefined);
+  const [salesPanelVariantId, setSalesPanelVariantId] = useState<string | undefined>(undefined);
 
   // 4. Barcode Scanner, Printer & NFC-e Modals States
   const [isScannerOpen, setIsScannerOpen] = useState(false);
@@ -303,8 +304,12 @@ export default function App() {
       const snapshot = createClosingSnapshot(true);
       if (snapshot) {
         setMonthlyClosings((prev) => [snapshot, ...prev.filter((c) => c.id !== snapshot.id)]);
+        dbSaveMonthlyClosing(snapshot).catch(console.error);
       }
     }
+
+    const resetTimestamp = Date.now();
+    localStorage.setItem('marento_last_reset_time', String(resetTimestamp));
 
     // 1. Clear transactions history locally
     setTransactions([]);
@@ -314,12 +319,12 @@ export default function App() {
     await dbClearTransactions();
 
     // 3. Reset product sales counts locally and in Supabase DB
-    setProducts((prev) =>
-      prev.map((p) => ({
-        ...p,
-        salesCount: 0,
-      }))
-    );
+    const updatedProducts = products.map((p) => ({
+      ...p,
+      salesCount: 0,
+    }));
+    setProducts(updatedProducts);
+    localStorage.setItem('marento_products', JSON.stringify(updatedProducts));
     await dbResetProductsSalesCount();
 
     // 4. Clear temporary notifications
@@ -402,21 +407,21 @@ export default function App() {
         }
 
         // 4. Transactions sync (Supabase as source of truth)
-        if (remoteTxs.length > 0) {
+        const lastResetStr = localStorage.getItem('marento_last_reset_time');
+        const lastResetTime = lastResetStr ? Number(lastResetStr) : 0;
+        const validRemoteTxs = remoteTxs.filter((t) => (t.timestamp || 0) > lastResetTime);
+
+        if (validRemoteTxs.length > 0) {
           setTransactions((prev) => {
-            if (prev.length === remoteTxs.length && prev[0]?.id === remoteTxs[0]?.id) {
+            if (prev.length === validRemoteTxs.length && prev[0]?.id === validRemoteTxs[0]?.id) {
               return prev;
             }
-            return remoteTxs;
+            return validRemoteTxs;
           });
+          localStorage.setItem('marento_transactions', JSON.stringify(validRemoteTxs));
         } else {
-          // If remote is empty, seed local transactions to Supabase
-          setTransactions((prev) => {
-            if (prev.length > 0) {
-              prev.forEach((t) => dbSaveTransaction(t));
-            }
-            return prev;
-          });
+          setTransactions([]);
+          localStorage.setItem('marento_transactions', '[]');
         }
 
         // 5. Monthly Closings sync
@@ -484,7 +489,11 @@ export default function App() {
           { event: '*', schema: 'public', table: 'transactions' },
           async () => {
             const remoteTxs = await dbFetchTransactions();
-            if (remoteTxs.length > 0) setTransactions(remoteTxs);
+            const lastResetStr = localStorage.getItem('marento_last_reset_time');
+            const lastResetTime = lastResetStr ? Number(lastResetStr) : 0;
+            const validRemoteTxs = remoteTxs.filter((t) => (t.timestamp || 0) > lastResetTime);
+            setTransactions(validRemoteTxs);
+            localStorage.setItem('marento_transactions', JSON.stringify(validRemoteTxs));
           }
         )
         .on(
@@ -771,8 +780,9 @@ export default function App() {
   };
 
   // Open Sales Panel (PDV Express)
-  const handleOpenSalesPanel = (productId?: string) => {
+  const handleOpenSalesPanel = (productId?: string, variantId?: string) => {
     setSalesPanelProductId(productId);
+    setSalesPanelVariantId(variantId);
     setIsSalesPanelOpen(true);
   };
 
@@ -1076,9 +1086,13 @@ export default function App() {
       {/* Sales Panel (PDV Express) Modal */}
       <SalesPanelModal
         isOpen={isSalesPanelOpen}
-        onClose={() => setIsSalesPanelOpen(false)}
+        onClose={() => {
+          setIsSalesPanelOpen(false);
+          setSalesPanelVariantId(undefined);
+        }}
         products={products}
         initialProductId={salesPanelProductId}
+        initialVariantId={salesPanelVariantId}
         onConfirmSale={handleConfirmSale}
         onOpenPrintReceipt={(tx) => {
           setPrintReceiptTx(tx);
