@@ -333,16 +333,24 @@ export async function dbSaveProduct(product: Product): Promise<{ success: boolea
 
 export async function dbDeleteProduct(id: string): Promise<boolean> {
   try {
-    const isUuid = UUID_REGEX.test(id);
-    let query = supabase.from('products').delete();
+    const cleanId = id.trim();
+    const isUuid = UUID_REGEX.test(cleanId);
+
     if (isUuid) {
-      query = query.eq('id', id);
-    } else {
-      query = query.or(`id.eq.${id},sku.eq.${id}`);
+      // 1. Cleanly delete child variants first
+      await supabase.from('product_variants').delete().eq('product_id', cleanId);
+      // 2. Unlink any transactions referencing this product
+      await supabase.from('transactions').update({ product_id: null }).eq('product_id', cleanId);
+      // 3. Delete the product by primary key UUID
+      const { error: uuidErr } = await supabase.from('products').delete().eq('id', cleanId);
+      if (!uuidErr) return true;
+      console.warn('Could not delete product by id:', uuidErr.message);
     }
-    const { error } = await query;
-    if (error) {
-      console.warn('Could not delete product from Supabase:', error.message);
+
+    // 4. Also delete any product by SKU match (safe for non-uuid strings)
+    const { error: skuErr } = await supabase.from('products').delete().eq('sku', cleanId);
+    if (skuErr && !isUuid) {
+      console.warn('Could not delete product by sku:', skuErr.message);
       return false;
     }
     return true;

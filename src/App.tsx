@@ -357,89 +357,29 @@ export default function App() {
 
         if (!isMounted) return;
 
-        // 1. Categories sync
-        if (remoteCats.length > 0) {
-          setCategories((prev) => {
-            if (prev.length === remoteCats.length && prev.every((v, i) => v === remoteCats[i])) return prev;
-            return remoteCats;
-          });
-        } else {
-          // If remote is empty, seed from local
-          setCategories((prev) => {
-            prev.forEach((cat) => dbAddCategory(cat));
-            return prev;
-          });
-        }
+        // 1. Categories sync (Direct database authority)
+        setCategories(remoteCats);
+        localStorage.setItem('marento_categories', JSON.stringify(remoteCats));
 
-        // 2. Suppliers sync
-        if (remoteSups.length > 0) {
-          setSuppliers((prev) => {
-            if (prev.length === remoteSups.length && prev.every((v, i) => v === remoteSups[i])) return prev;
-            return remoteSups;
-          });
-        } else {
-          // If remote is empty, seed from local
-          setSuppliers((prev) => {
-            prev.forEach((sup) => dbAddSupplier(sup));
-            return prev;
-          });
-        }
+        // 2. Suppliers sync (Direct database authority)
+        setSuppliers(remoteSups);
+        localStorage.setItem('marento_suppliers', JSON.stringify(remoteSups));
 
-        // 3. Products sync (Supabase as source of truth)
-        if (remoteProds.length > 0) {
-          setProducts((prev) => {
-            if (
-              prev.length === remoteProds.length &&
-              prev.every((p, i) => p.id === remoteProds[i].id && p.quantity === remoteProds[i].quantity && p.price === remoteProds[i].price && p.name === remoteProds[i].name)
-            ) {
-              return prev;
-            }
-            return remoteProds;
-          });
-        } else {
-          // If remote is empty, seed initial products to Supabase
-          setProducts((prev) => {
-            if (prev.length > 0) {
-              prev.forEach((p) => dbSaveProduct(p));
-            }
-            return prev;
-          });
-        }
+        // 3. Products sync (Supabase as single source of truth - respect user deletions)
+        setProducts(remoteProds);
+        localStorage.setItem('marento_products', JSON.stringify(remoteProds));
 
         // 4. Transactions sync (Supabase as source of truth)
         const lastResetStr = localStorage.getItem('marento_last_reset_time');
         const lastResetTime = lastResetStr ? Number(lastResetStr) : 0;
         const validRemoteTxs = remoteTxs.filter((t) => (t.timestamp || 0) > lastResetTime);
 
-        if (validRemoteTxs.length > 0) {
-          setTransactions((prev) => {
-            if (prev.length === validRemoteTxs.length && prev[0]?.id === validRemoteTxs[0]?.id) {
-              return prev;
-            }
-            return validRemoteTxs;
-          });
-          localStorage.setItem('marento_transactions', JSON.stringify(validRemoteTxs));
-        } else {
-          setTransactions([]);
-          localStorage.setItem('marento_transactions', '[]');
-        }
+        setTransactions(validRemoteTxs);
+        localStorage.setItem('marento_transactions', JSON.stringify(validRemoteTxs));
 
         // 5. Monthly Closings sync
-        if (remoteClosings.length > 0) {
-          setMonthlyClosings((prev) => {
-            if (prev.length === remoteClosings.length && prev[0]?.id === remoteClosings[0]?.id) {
-              return prev;
-            }
-            return remoteClosings;
-          });
-        } else {
-          setMonthlyClosings((prev) => {
-            if (prev.length > 0) {
-              prev.forEach((c) => dbSaveMonthlyClosing(c));
-            }
-            return prev;
-          });
-        }
+        setMonthlyClosings(remoteClosings);
+        localStorage.setItem('marento_monthly_closings', JSON.stringify(remoteClosings));
       } catch (e) {
         console.warn('[Supabase Sync Warning]:', e);
       }
@@ -457,7 +397,8 @@ export default function App() {
           { event: '*', schema: 'public', table: 'categories' },
           async () => {
             const remoteCats = await dbFetchCategories();
-            if (remoteCats.length > 0) setCategories(remoteCats);
+            setCategories(remoteCats);
+            localStorage.setItem('marento_categories', JSON.stringify(remoteCats));
           }
         )
         .on(
@@ -465,7 +406,8 @@ export default function App() {
           { event: '*', schema: 'public', table: 'suppliers' },
           async () => {
             const remoteSups = await dbFetchSuppliers();
-            if (remoteSups.length > 0) setSuppliers(remoteSups);
+            setSuppliers(remoteSups);
+            localStorage.setItem('marento_suppliers', JSON.stringify(remoteSups));
           }
         )
         .on(
@@ -473,7 +415,8 @@ export default function App() {
           { event: '*', schema: 'public', table: 'products' },
           async () => {
             const remoteProds = await dbFetchProducts();
-            if (remoteProds.length > 0) setProducts(remoteProds);
+            setProducts(remoteProds);
+            localStorage.setItem('marento_products', JSON.stringify(remoteProds));
           }
         )
         .on(
@@ -481,7 +424,8 @@ export default function App() {
           { event: '*', schema: 'public', table: 'product_variants' },
           async () => {
             const remoteProds = await dbFetchProducts();
-            if (remoteProds.length > 0) setProducts(remoteProds);
+            setProducts(remoteProds);
+            localStorage.setItem('marento_products', JSON.stringify(remoteProds));
           }
         )
         .on(
@@ -501,7 +445,8 @@ export default function App() {
           { event: '*', schema: 'public', table: 'monthly_closings' },
           async () => {
             const remoteClosings = await dbFetchMonthlyClosings();
-            if (remoteClosings.length > 0) setMonthlyClosings(remoteClosings);
+            setMonthlyClosings(remoteClosings);
+            localStorage.setItem('marento_monthly_closings', JSON.stringify(remoteClosings));
           }
         )
         .subscribe((status) => {
@@ -543,7 +488,11 @@ export default function App() {
 
   // Delete custom category
   const handleDeleteCategory = async (name: string) => {
-    setCategories((prev) => prev.filter((c) => c !== name));
+    setCategories((prev) => {
+      const remaining = prev.filter((c) => c !== name);
+      localStorage.setItem('marento_categories', JSON.stringify(remaining));
+      return remaining;
+    });
     if (selectedCategory === name) {
       setSelectedCategory('Todos');
     }
@@ -561,8 +510,16 @@ export default function App() {
       return;
     }
 
-    setCategories((prev) => prev.map((c) => c === oldName ? cleanNewName : c));
-    setProducts((prevProds) => prevProds.map((prod) => prod.category === oldName ? { ...prod, category: cleanNewName } : prod));
+    setCategories((prev) => {
+      const updated = prev.map((c) => c === oldName ? cleanNewName : c);
+      localStorage.setItem('marento_categories', JSON.stringify(updated));
+      return updated;
+    });
+    setProducts((prevProds) => {
+      const updated = prevProds.map((prod) => prod.category === oldName ? { ...prod, category: cleanNewName } : prod);
+      localStorage.setItem('marento_products', JSON.stringify(updated));
+      return updated;
+    });
     if (selectedCategory === oldName) {
       setSelectedCategory(cleanNewName);
     }
@@ -580,7 +537,11 @@ export default function App() {
       alert('Este fornecedor já existe!');
       return;
     }
-    setSuppliers((prev) => [...prev, cleanName]);
+    setSuppliers((prev) => {
+      const updated = [...prev, cleanName];
+      localStorage.setItem('marento_suppliers', JSON.stringify(updated));
+      return updated;
+    });
     const res = await dbAddSupplier(cleanName);
     if (res && !res.success && res.error) {
       console.warn('[Supabase Supplier Save Warning]:', res.error);
@@ -589,7 +550,11 @@ export default function App() {
 
   // Delete supplier
   const handleDeleteSupplier = async (name: string) => {
-    setSuppliers((prev) => prev.filter((s) => s !== name));
+    setSuppliers((prev) => {
+      const remaining = prev.filter((s) => s !== name);
+      localStorage.setItem('marento_suppliers', JSON.stringify(remaining));
+      return remaining;
+    });
     await dbDeleteSupplier(name);
   };
 
@@ -693,8 +658,16 @@ export default function App() {
 
   // Delete product
   const handleDeleteProduct = async (id: string) => {
-    setProducts((prev) => prev.filter((p) => p.id !== id));
-    setTransactions((prev) => prev.filter((t) => t.productId !== id));
+    setProducts((prev) => {
+      const remaining = prev.filter((p) => p.id !== id && p.sku !== id);
+      localStorage.setItem('marento_products', JSON.stringify(remaining));
+      return remaining;
+    });
+    setTransactions((prev) => {
+      const remaining = prev.filter((t) => t.productId !== id && t.sku !== id);
+      localStorage.setItem('marento_transactions', JSON.stringify(remaining));
+      return remaining;
+    });
     await dbDeleteProduct(id);
   };
 
