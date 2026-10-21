@@ -12,6 +12,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { Product, CategoryName } from '../types';
+import { compressImageFile } from '../lib/imageUtils';
 
 interface NewItemModalProps {
   isOpen: boolean;
@@ -51,6 +52,7 @@ export default function NewItemModal({
   // Inline Category Creator
   const [isTypingNewCat, setIsTypingNewCat] = useState(false);
   const [newCatName, setNewCatName] = useState('');
+  const [isProcessingImage, setIsProcessingImage] = useState(false);
 
   // Helper to generate SKU
   const generateSku = (catName?: string) => {
@@ -112,16 +114,18 @@ export default function NewItemModal({
     return '+0.00%';
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        if (typeof reader.result === 'string') {
-          setImageUrl(reader.result);
-        }
-      };
-      reader.readAsDataURL(file);
+      try {
+        setIsProcessingImage(true);
+        const compressed = await compressImageFile(file, 800, 800, 0.82);
+        setImageUrl(compressed);
+      } catch (err: any) {
+        console.error('Error compressing image:', err);
+      } finally {
+        setIsProcessingImage(false);
+      }
     }
   };
 
@@ -456,38 +460,61 @@ export default function NewItemModal({
               </div>
             </div>
 
-            {/* Field: IMAGEM DO PRODUTO (ARQUIVO / LINK) */}
+            {/* Field: FOTO DO PRODUTO (GALERIA) */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between text-[10px]">
                 <label className="font-bold uppercase tracking-wider text-[#D4A017] font-sans">
-                  IMAGEM DO PRODUTO (ARQUIVO / LINK)
+                  FOTO DO PRODUTO
                 </label>
-                <span className="text-[#8E8E93] uppercase tracking-wider">ALTA RESOLUÇÃO</span>
+                <span className="text-[#8E8E93] uppercase tracking-wider">GALERIA DO DISPOSITIVO</span>
               </div>
 
-              {/* Gallery button */}
-              <label className="w-full py-3 px-4 bg-[#141416] border border-white/10 hover:border-[#E5B842]/40 rounded-xl text-white text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer shadow-sm">
-                <FolderOpen className="w-4 h-4 text-[#ffd56d]" />
-                <span>Selecionar Foto da Galeria</span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleFileUpload}
-                  className="hidden"
-                />
-              </label>
-
-              {/* URL input */}
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="Ou cole o link da imagem (Unsplash)..."
-                  value={imageUrl}
-                  onChange={(e) => setImageUrl(e.target.value)}
-                  className="w-full bg-[#141416] border border-white/10 rounded-xl pl-9 pr-3.5 py-2.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-[#E5B842]"
-                />
-                <LinkIcon className="absolute left-3 top-3 w-3.5 h-3.5 text-[#8E8E93]" />
-              </div>
+              {imageUrl ? (
+                <div className="flex items-center gap-3 p-3 bg-[#141416] border border-[#ffd56d]/30 rounded-xl">
+                  <div className="w-14 h-14 rounded-lg overflow-hidden bg-black shrink-0 border border-white/10">
+                    <img
+                      src={imageUrl}
+                      alt="Foto do produto"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-white truncate">Foto Carregada com Sucesso</p>
+                    <p className="text-[10px] text-emerald-400 font-mono">Otimizada para carregamento instantâneo</p>
+                    <div className="flex items-center gap-2 mt-1.5">
+                      <label className="text-[10px] text-[#ffd56d] hover:underline flex items-center gap-1 cursor-pointer font-bold">
+                        <FolderOpen className="w-3.5 h-3.5" />
+                        <span>Trocar foto</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleFileUpload}
+                          className="hidden"
+                        />
+                      </label>
+                      <span className="text-[#8E8E93] text-[10px]">&bull;</span>
+                      <button
+                        type="button"
+                        onClick={() => setImageUrl('')}
+                        className="text-[10px] text-red-400 hover:underline cursor-pointer"
+                      >
+                        Remover
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <label className="w-full py-3.5 px-4 bg-[#141416] border border-white/10 hover:border-[#ffd56d]/50 rounded-xl text-white text-xs font-bold transition flex items-center justify-center gap-2.5 cursor-pointer shadow-sm group">
+                  <FolderOpen className="w-4 h-4 text-[#ffd56d] group-hover:scale-110 transition-transform" />
+                  <span>{isProcessingImage ? 'Otimizando foto...' : 'Selecionar Foto da Galeria'}</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                  />
+                </label>
+              )}
             </div>
 
             {/* Field: DESCRIÇÃO DO PRODUTO */}

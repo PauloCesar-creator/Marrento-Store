@@ -84,6 +84,25 @@ export default function App() {
     return Array.from(new Set(parsed.filter(Boolean)));
   });
 
+  // Auto-Exclusão Categories (when products in these categories are sold, they are automatically removed from stock while preserving history)
+  const [autoDeleteCategories, setAutoDeleteCategories] = useState<string[]>(() => {
+    const saved = localStorage.getItem('marento_auto_delete_categories');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  useEffect(() => {
+    localStorage.setItem('marento_auto_delete_categories', JSON.stringify(autoDeleteCategories));
+  }, [autoDeleteCategories]);
+
+  const handleToggleCategoryAutoDelete = (categoryName: string) => {
+    setAutoDeleteCategories((prev) => {
+      const exists = prev.includes(categoryName);
+      const updated = exists ? prev.filter((c) => c !== categoryName) : [...prev, categoryName];
+      localStorage.setItem('marento_auto_delete_categories', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
   // 2. Navigation & UI States
   const [activeTab, setActiveTab] = useState<'Dashboard' | 'Estoque' | 'Etiquetas' | 'Relatórios'>('Dashboard');
   const [selectedCategory, setSelectedCategory] = useState<CategoryName | 'Todos'>('Todos');
@@ -663,11 +682,7 @@ export default function App() {
       localStorage.setItem('marento_products', JSON.stringify(remaining));
       return remaining;
     });
-    setTransactions((prev) => {
-      const remaining = prev.filter((t) => t.productId !== id && t.sku !== id);
-      localStorage.setItem('marento_transactions', JSON.stringify(remaining));
-      return remaining;
-    });
+    // Preserva o histórico de vendas/transações (não apaga transactions)
     await dbDeleteProduct(id);
   };
 
@@ -679,7 +694,13 @@ export default function App() {
     price: number,
     customProductOverride?: Product,
     isSale: boolean = true,
-    details?: { reason?: string; paymentMethod?: string; customerName?: string }
+    details?: {
+      reason?: string;
+      paymentMethod?: string;
+      customerName?: string;
+      variantId?: string;
+      variantName?: string;
+    }
   ): Promise<{ success: boolean; transaction?: Transaction }> => {
     const baseProd = customProductOverride || products.find((p) => p.id === productId);
     if (!baseProd) return { success: false };
@@ -713,20 +734,72 @@ export default function App() {
       };
     }
 
-    // Update quantity & sales count on product state
-    setProducts((prev) =>
-      prev.map((p) => (p.id === productId ? updatedProduct : p))
-    );
+    const targetCategory = updatedProduct.category || baseProd.category;
+    const isAutoDelete = type === 'saida' && isSale && autoDeleteCategories.includes(targetCategory);
 
-    // Sync updated stock to Supabase
-    const prodRes = await dbSaveProduct(updatedProduct);
+    let prodRes: any = null;
+    if (isAutoDelete) {
+      // Auto-Exclusão ativa para esta categoria:
+      // Se tiver variações e uma variação específica foi vendida, remove a variação individualmente!
+      const soldVariantId = details?.variantId;
+      if (soldVariantId && baseProd.variants && baseProd.variants.length > 0) {
+        const remainingVariants = baseProd.variants.filter((v) => v.id !== soldVariantId);
+        if (remainingVariants.length > 0) {
+          // Ainda restam outras variações: atualiza o produto mantendo apenas as restantes
+          const newTotalQty = remainingVariants.reduce((sum, v) => sum + (v.quantity || 0), 0);
+          const updatedWithRemaining: Product = {
+            ...updatedProduct,
+            variants: remainingVariants,
+            quantity: newTotalQty,
+          };
+          setProducts((prev) => {
+            const updated = prev.map((p) => (p.id === productId ? updatedWithRemaining : p));
+            localStorage.setItem('marento_products', JSON.stringify(updated));
+            return updated;
+          });
+          prodRes = await dbSaveProduct(updatedWithRemaining);
+          // Remove a variação individual do banco
+          await supabase.from('product_variants').delete().eq('id', soldVariantId);
+        } else {
+          // Era a última variação: apaga o produto completo do estoque
+          setProducts((prev) => {
+            const remaining = prev.filter((p) => p.id !== productId && p.sku !== baseProd.sku);
+            localStorage.setItem('marento_products', JSON.stringify(remaining));
+            return remaining;
+          });
+          await dbDeleteProduct(productId);
+        }
+      } else {
+        // Produto sem variações: apaga o produto completo do estoque
+        setProducts((prev) => {
+          const remaining = prev.filter((p) => p.id !== productId && p.sku !== baseProd.sku);
+          localStorage.setItem('marento_products', JSON.stringify(remaining));
+          return remaining;
+        });
+        await dbDeleteProduct(productId);
+      }
+    } else {
+      // Atualização normal de estoque
+      setProducts((prev) => {
+        const updated = prev.map((p) => (p.id === productId ? updatedProduct : p));
+        localStorage.setItem('marento_products', JSON.stringify(updated));
+        return updated;
+      });
+      // Sincroniza estoque atualizado com o Supabase
+      prodRes = await dbSaveProduct(updatedProduct);
+    }
 
-    // Push entry to transactions history
+    // Push entry to transactions history (o histórico da venda fica 100% preservado)
+    const txProdName = details?.variantName
+      ? `${updatedProduct.name} (${details.variantName})`
+      : updatedProduct.name;
+    const txSku = (details?.variantId && baseProd.variants?.find((v) => v.id === details.variantId)?.sku) || updatedProduct.sku;
+
     const tx: Transaction = {
       id: generateUUID(),
       productId,
-      productName: updatedProduct.name,
-      sku: updatedProduct.sku,
+      productName: txProdName,
+      sku: txSku,
       category: updatedProduct.category,
       type,
       quantity: qty,
@@ -941,6 +1014,8 @@ export default function App() {
                 onEditCategory={handleEditCategory}
                 onOpenBarcodeScanner={() => setIsScannerOpen(true)}
                 onOpenPrintTag={handleOpenPrintTag}
+                autoDeleteCategories={autoDeleteCategories}
+                onToggleCategoryAutoDelete={handleToggleCategoryAutoDelete}
               />
             )}
 

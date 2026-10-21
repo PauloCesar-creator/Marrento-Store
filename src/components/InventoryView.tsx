@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Plus, Minus, Trash2, Edit, AlertCircle, ShoppingBag, SlidersHorizontal, Eye, Tag, X, Check, Truck, Sparkles, Layers, Barcode, Printer } from 'lucide-react';
+import { Search, Plus, Minus, Trash2, Edit, AlertCircle, ShoppingBag, SlidersHorizontal, Tag, X, Check, Truck, Sparkles, Layers, Barcode, Printer, Zap } from 'lucide-react';
 import { Product, CategoryName } from '../types';
-import SmartPanelModal from './SmartPanelModal';
 import ProductDetailModal from './ProductDetailModal';
 import NewItemModal from './NewItemModal';
 
@@ -30,7 +29,9 @@ interface InventoryViewProps {
   onDeleteCategory: (name: string) => void;
   onEditCategory: (oldName: string, newName: string) => void;
   onOpenBarcodeScanner?: () => void;
-  onOpenPrintTag?: (product: Product) => void;
+  onOpenPrintTag?: (product: Product, variant?: any) => void;
+  autoDeleteCategories?: string[];
+  onToggleCategoryAutoDelete?: (categoryName: string) => void;
 }
 
 export default function InventoryView({
@@ -51,6 +52,8 @@ export default function InventoryView({
   onEditCategory,
   onOpenBarcodeScanner,
   onOpenPrintTag,
+  autoDeleteCategories = [],
+  onToggleCategoryAutoDelete,
 }: InventoryViewProps) {
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [isAddOpen, setIsAddOpen] = useState<boolean>(false);
@@ -61,11 +64,8 @@ export default function InventoryView({
   const [isAddingCategoryInline, setIsAddingCategoryInline] = useState(false);
   const [newInlineCatName, setNewInlineCatName] = useState('');
 
-  // Product Details modal state
+  // Product Details modal state (Principal modal de detalhes e variações)
   const [detailProd, setDetailProd] = useState<Product | null>(null);
-
-  // Smart Panel modal state
-  const [smartPanelProd, setSmartPanelProd] = useState<Product | null>(null);
 
   // Category management states
   const [isManageCatsOpen, setIsManageCatsOpen] = useState(false);
@@ -351,20 +351,27 @@ export default function InventoryView({
 
         {/* Categories Scroller Chips */}
         <div className="flex items-center gap-2 overflow-x-auto pb-1.5 scrollbar-none snap-x" id="inv-pills">
-          {categoriesList.map((cat, idx) => (
-            <button
-              key={`inv-pill-${cat}-${idx}`}
-              onClick={() => onSelectCategory(cat)}
-              className={`shrink-0 snap-start px-4 py-2 rounded-xl text-xs font-semibold border transition ${
-                selectedCategory === cat
-                  ? 'bg-brand-primary border-brand-primary text-black'
-                  : 'bg-brand-secondary border-brand-tertiary text-gray-400 hover:text-brand-neutral'
-              }`}
-              id={`inv-pill-${cat}`}
-            >
-              {cat}
-            </button>
-          ))}
+          {categoriesList.map((cat, idx) => {
+            const isAutoDel = autoDeleteCategories.includes(cat);
+            return (
+              <button
+                key={`inv-pill-${cat}-${idx}`}
+                onClick={() => onSelectCategory(cat)}
+                className={`shrink-0 snap-start px-4 py-2 rounded-xl text-xs font-semibold border transition flex items-center gap-1.5 ${
+                  selectedCategory === cat
+                    ? 'bg-brand-primary border-brand-primary text-black'
+                    : 'bg-brand-secondary border-brand-tertiary text-gray-400 hover:text-brand-neutral'
+                }`}
+                id={`inv-pill-${cat}`}
+                title={isAutoDel ? 'Categoria com Auto-Exclusão ativa: produtos são apagados do estoque automaticamente ao vender' : undefined}
+              >
+                <span>{cat}</span>
+                {isAutoDel && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 ring-2 ring-amber-400/40" />
+                )}
+              </button>
+            );
+          })}
 
           {/* Quick inline add category button on the pills list */}
           {isAddingCategoryInline ? (
@@ -428,7 +435,7 @@ export default function InventoryView({
             {/* Top Image area with Stock Badges */}
             <div
               className="relative h-44 w-full overflow-hidden bg-brand-bg/40 cursor-pointer"
-              onClick={() => setSmartPanelProd(prod)}
+              onClick={() => setDetailProd(prod)}
               id={`inv-img-area-${prod.id}`}
             >
               <img
@@ -442,10 +449,10 @@ export default function InventoryView({
               {/* Overlay Gradient for contrast */}
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
 
-              {/* Smart Panel Badge if variations exist */}
+              {/* Variations Count Badge if variations exist */}
               {prod.variants && prod.variants.length > 0 && (
                 <div className="absolute top-3 left-3" id={`inv-variants-badge-${prod.id}`}>
-                  <span className="px-2.5 py-1 rounded-lg text-[9px] uppercase tracking-wider font-bold bg-brand-primary text-black border border-brand-primary shadow-md flex items-center gap-1">
+                  <span className="px-2.5 py-1 rounded-lg text-[9px] uppercase tracking-wider font-bold bg-[#ffd56d] text-black border border-[#ffd56d] shadow-md flex items-center gap-1">
                     <Sparkles className="w-3 h-3 stroke-[2.5]" />
                     {prod.variants.length} Variações
                   </span>
@@ -468,7 +475,11 @@ export default function InventoryView({
             </div>
 
             {/* Content area */}
-            <div className="flex-1 p-4 flex flex-col justify-between" id={`inv-content-${prod.id}`}>
+            <div 
+              className="flex-1 p-4 flex flex-col justify-between cursor-pointer" 
+              onClick={() => setDetailProd(prod)}
+              id={`inv-content-${prod.id}`}
+            >
               <div className="space-y-1.5" id={`inv-desc-${prod.id}`}>
                 <div className="flex items-center justify-between" id={`inv-cat-row-${prod.id}`}>
                   <span className="text-[10px] text-gray-500 font-mono font-medium" id={`inv-sku-${prod.id}`}>
@@ -480,8 +491,7 @@ export default function InventoryView({
                 </div>
 
                 <h3
-                  onClick={() => setDetailProd(prod)}
-                  className="font-sans font-bold text-sm text-brand-neutral group-hover:text-brand-primary transition truncate cursor-pointer"
+                  className="font-sans font-bold text-sm text-brand-neutral group-hover:text-brand-primary transition truncate"
                   id={`inv-name-${prod.id}`}
                   title="Clique para visualizar detalhes completos"
                 >
@@ -500,26 +510,15 @@ export default function InventoryView({
                     {prod.supplier}
                   </span>
                 </div>
-
-                {/* Smart Panel Button on Card */}
-                <button
-                  type="button"
-                  onClick={() => setSmartPanelProd(prod)}
-                  className="w-full mt-2.5 py-2 px-3 rounded-xl bg-brand-primary/10 hover:bg-brand-primary/25 border border-brand-primary/30 text-brand-primary font-sans font-bold text-xs flex items-center justify-center gap-2 transition duration-200 cursor-pointer shadow-xs group-hover:border-brand-primary/60"
-                  id={`inv-btn-smartpanel-${prod.id}`}
-                  title="Abrir Painel Inteligente com Carrossel de Variações"
-                >
-                  <Sparkles className="w-3.5 h-3.5 text-brand-primary" />
-                  {prod.variants && prod.variants.length > 0
-                    ? `Painel Inteligente (${prod.variants.length} cores)`
-                    : 'Painel Inteligente (+ Variações)'}
-                </button>
               </div>
 
               {/* Interactive Quick action panel */}
-              <div className="flex items-center justify-between gap-1.5 mt-4 pt-3 border-t border-brand-tertiary/60" id={`inv-actions-${prod.id}`}>
-                
-                {/* Stock Indicator Badge (clean display, no quick stock modal) */}
+              <div 
+                className="flex items-center justify-between gap-1.5 mt-4 pt-3 border-t border-brand-tertiary/60" 
+                onClick={(e) => e.stopPropagation()}
+                id={`inv-actions-${prod.id}`}
+              >
+                {/* Stock Indicator Badge */}
                 <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-brand-bg border border-brand-tertiary/70 shadow-inner" id={`inv-stock-badge-${prod.id}`}>
                   <span className="text-[10px] text-gray-400 font-sans uppercase font-bold tracking-wider">Estoque:</span>
                   <span className={`text-xs font-mono font-bold ${prod.quantity <= (prod.minStock || 0) ? 'text-amber-400' : 'text-brand-neutral'}`}>
@@ -527,20 +526,14 @@ export default function InventoryView({
                   </span>
                 </div>
 
-                {/* Visualizar, Print Tag, Edit & Delete actions */}
+                {/* Print Tag, Edit & Delete actions (eye button removed as requested, click card opens details) */}
                 <div className="flex items-center gap-1" id={`inv-edit-delete-${prod.id}`}>
-                  <button
-                    onClick={() => setDetailProd(prod)}
-                    className="p-2 rounded-lg bg-brand-bg hover:bg-brand-primary/20 border border-brand-tertiary/60 text-gray-400 hover:text-brand-primary transition cursor-pointer"
-                    title="Visualizar Informações do Produto"
-                    id={`inv-btn-view-${prod.id}`}
-                  >
-                    <Eye className="w-3.5 h-3.5" />
-                  </button>
-
                   {onOpenPrintTag && (
                     <button
-                      onClick={() => onOpenPrintTag(prod)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenPrintTag(prod);
+                      }}
                       className="p-2 rounded-lg bg-brand-bg hover:bg-brand-primary/20 border border-brand-tertiary/60 text-gray-400 hover:text-brand-primary transition cursor-pointer"
                       title="Imprimir Etiqueta de Código de Barras"
                       id={`inv-btn-print-${prod.id}`}
@@ -550,7 +543,10 @@ export default function InventoryView({
                   )}
 
                   <button
-                    onClick={() => handleOpenEdit(prod)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleOpenEdit(prod);
+                    }}
                     className="p-2 rounded-lg bg-brand-bg hover:bg-brand-tertiary border border-brand-tertiary/60 text-gray-400 hover:text-brand-primary transition cursor-pointer"
                     title="Editar produto"
                     id={`inv-btn-edit-${prod.id}`}
@@ -744,57 +740,90 @@ export default function InventoryView({
                             </button>
                           </div>
                         ) : (
-                          <>
-                            <span className="text-xs font-semibold text-brand-neutral">
-                              {cat}
-                            </span>
-                            <div className="flex items-center gap-1">
-                              {/* Edit Trigger */}
-                              <button
-                                onClick={() => {
-                                  setEditingCatName(cat);
-                                  setEditingCatValue(cat);
-                                  setDeletingCatName(null);
-                                }}
-                                className="p-1.5 rounded-lg bg-brand-bg hover:bg-brand-tertiary border border-brand-tertiary/40 text-gray-400 hover:text-white transition cursor-pointer"
-                                title="Editar categoria"
-                              >
-                                <Edit className="w-3.5 h-3.5" />
-                              </button>
-
-                              {/* Delete Action (with inline confirm) */}
-                              {deletingCatName === cat ? (
-                                <div className="flex items-center gap-1 ml-1">
-                                  <button
-                                    onClick={() => {
-                                      onDeleteCategory(cat);
-                                      setDeletingCatName(null);
-                                    }}
-                                    className="px-2 py-1 rounded bg-brand-red text-white text-[10px] font-bold hover:bg-brand-red/90 transition cursor-pointer"
-                                  >
-                                    Sim
-                                  </button>
-                                  <button
-                                    onClick={() => setDeletingCatName(null)}
-                                    className="px-2 py-1 rounded bg-brand-tertiary text-gray-300 text-[10px] hover:text-white transition cursor-pointer"
-                                  >
-                                    Não
-                                  </button>
-                                </div>
-                              ) : (
+                          <div className="flex flex-col gap-2 w-full">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-semibold text-brand-neutral">
+                                  {cat}
+                                </span>
+                                {autoDeleteCategories.includes(cat) && (
+                                  <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-400/20 text-amber-300 border border-amber-400/30 flex items-center gap-1">
+                                    <Zap className="w-2.5 h-2.5 fill-amber-400" />
+                                    Auto-Exclusão Ativa
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-1">
+                                {/* Edit Trigger */}
                                 <button
                                   onClick={() => {
-                                    setDeletingCatName(cat);
-                                    setEditingCatName(null);
+                                    setEditingCatName(cat);
+                                    setEditingCatValue(cat);
+                                    setDeletingCatName(null);
                                   }}
-                                  className="p-1.5 rounded-lg bg-brand-bg hover:bg-brand-red/10 border border-brand-tertiary/40 text-gray-400 hover:text-brand-red transition cursor-pointer"
-                                  title="Excluir categoria"
+                                  className="p-1.5 rounded-lg bg-brand-bg hover:bg-brand-tertiary border border-brand-tertiary/40 text-gray-400 hover:text-white transition cursor-pointer"
+                                  title="Editar categoria"
                                 >
-                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <Edit className="w-3.5 h-3.5" />
                                 </button>
-                              )}
+
+                                {/* Delete Action (with inline confirm) */}
+                                {deletingCatName === cat ? (
+                                  <div className="flex items-center gap-1 ml-1">
+                                    <button
+                                      onClick={() => {
+                                        onDeleteCategory(cat);
+                                        setDeletingCatName(null);
+                                      }}
+                                      className="px-2 py-1 rounded bg-brand-red text-white text-[10px] font-bold hover:bg-brand-red/90 transition cursor-pointer"
+                                    >
+                                      Sim
+                                    </button>
+                                    <button
+                                      onClick={() => setDeletingCatName(null)}
+                                      className="px-2 py-1 rounded bg-brand-tertiary text-gray-300 text-[10px] hover:text-white transition cursor-pointer"
+                                    >
+                                      Não
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <button
+                                    onClick={() => {
+                                      setDeletingCatName(cat);
+                                      setEditingCatName(null);
+                                    }}
+                                    className="p-1.5 rounded-lg bg-brand-bg hover:bg-brand-red/10 border border-brand-tertiary/40 text-gray-400 hover:text-brand-red transition cursor-pointer"
+                                    title="Excluir categoria"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </div>
                             </div>
-                          </>
+
+                            {/* Auto-Exclusão Switch */}
+                            <div className="flex items-center justify-between pt-1.5 border-t border-brand-tertiary/20 text-[11px]">
+                              <span className="text-gray-400 text-[10px] flex items-center gap-1">
+                                <Zap className="w-3 h-3 text-amber-400" />
+                                Auto-Exclusão do Estoque ao Vender:
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => onToggleCategoryAutoDelete && onToggleCategoryAutoDelete(cat)}
+                                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                                  autoDeleteCategories.includes(cat) ? 'bg-amber-400' : 'bg-brand-tertiary'
+                                }`}
+                                title="Ativar/Desativar exclusão automática do produto ao ser vendido (mantém o histórico)"
+                              >
+                                <span
+                                  aria-hidden="true"
+                                  className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-black shadow ring-0 transition duration-200 ease-in-out ${
+                                    autoDeleteCategories.includes(cat) ? 'translate-x-4' : 'translate-x-0'
+                                  }`}
+                                />
+                              </button>
+                            </div>
+                          </div>
                         )}
                       </div>
                     ))
@@ -1011,29 +1040,18 @@ export default function InventoryView({
         )}
       </AnimatePresence>
 
-      {/* Smart Panel Modal */}
-      {smartPanelProd && (
-        <SmartPanelModal
-          product={smartPanelProd}
-          isOpen={!!smartPanelProd}
-          onClose={() => setSmartPanelProd(null)}
-          onUpdateProduct={(updated) => {
-            onEditProduct(updated);
-            setSmartPanelProd(updated);
-          }}
-        />
-      )}
-
-
-
-      {/* Product Detail Modal (Visualizar Informações do Produto) */}
+      {/* Product Detail Modal (Visualizar Informações do Produto / Gestão de Variações) */}
       {detailProd && (
         <ProductDetailModal
           product={detailProd}
           isOpen={!!detailProd}
           onClose={() => setDetailProd(null)}
+          onUpdateProduct={(updated) => {
+            onEditProduct(updated);
+            setDetailProd(updated);
+          }}
           onOpenEdit={(p) => handleOpenEdit(p)}
-          onOpenPrintTag={(p) => onOpenPrintTag && onOpenPrintTag(p)}
+          onOpenPrintTag={(p, v) => onOpenPrintTag && onOpenPrintTag(p, v)}
         />
       )}
 

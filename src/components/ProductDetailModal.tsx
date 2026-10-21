@@ -8,15 +8,19 @@ import {
   Check,
   Plus,
   Upload,
+  FolderOpen,
   X,
   Edit2,
   Trash2,
   Layers,
-  ArrowRight
+  ArrowRight,
+  Printer,
+  Edit
 } from 'lucide-react';
 import { Product, ProductVariant } from '../types';
 import { generateUUID } from '../utils/uuid';
 import { generateVariantCode, generateVariantBarcode } from '../utils/variantCode';
+import { compressImageFile } from '../lib/imageUtils';
 
 interface ProductDetailModalProps {
   product: Product | null;
@@ -24,7 +28,7 @@ interface ProductDetailModalProps {
   onClose: () => void;
   onUpdateProduct?: (product: Product) => void;
   onOpenEdit?: (product: Product) => void;
-  onOpenPrintTag?: (product: Product) => void;
+  onOpenPrintTag?: (product: Product, variant?: ProductVariant) => void;
 }
 
 export default function ProductDetailModal({
@@ -35,9 +39,7 @@ export default function ProductDetailModal({
   onOpenEdit,
   onOpenPrintTag,
 }: ProductDetailModalProps) {
-  if (!isOpen || !product) return null;
-
-  const variants = product.variants || [];
+  const variants = product?.variants || [];
   const [selectedVariantId, setSelectedVariantId] = useState<string | 'main'>(
     variants.length > 0 ? variants[0].id : 'main'
   );
@@ -53,6 +55,9 @@ export default function ProductDetailModal({
   const [newVarName, setNewVarName] = useState('');
   const [newVarQty, setNewVarQty] = useState<number>(1);
   const [newVarImage, setNewVarImage] = useState('');
+  const [isProcessingImage, setIsProcessingImage] = useState(false);
+
+  if (!isOpen || !product) return null;
 
   const currentVariant = variants.find((v) => v.id === selectedVariantId);
   const heroImage =
@@ -104,6 +109,20 @@ export default function ProductDetailModal({
     setIsEditingVariant(false);
   };
 
+  const handleDeleteVariant = (variantId: string) => {
+    if (!onUpdateProduct) return;
+    const updatedVariants = variants.filter((v) => v.id !== variantId);
+    const newTotal = updatedVariants.reduce((sum, v) => sum + v.quantity, 0);
+    const updatedProduct: Product = {
+      ...product,
+      variants: updatedVariants,
+      quantity: newTotal,
+    };
+    onUpdateProduct(updatedProduct);
+    setIsEditingVariant(false);
+    setSelectedVariantId(updatedVariants.length > 0 ? updatedVariants[0].id : 'main');
+  };
+
   const handleAddNewVariant = (e: React.FormEvent) => {
     e.preventDefault();
     const trimmedName = newVarName.trim();
@@ -140,20 +159,22 @@ export default function ProductDetailModal({
     setIsAddingNewVar(false);
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, isNew = false) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, isNew = false) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        if (typeof reader.result === 'string') {
-          if (isNew) {
-            setNewVarImage(reader.result);
-          } else {
-            setEditVarImage(reader.result);
-          }
+      try {
+        setIsProcessingImage(true);
+        const compressed = await compressImageFile(file, 800, 800, 0.82);
+        if (isNew) {
+          setNewVarImage(compressed);
+        } else {
+          setEditVarImage(compressed);
         }
-      };
-      reader.readAsDataURL(file);
+      } catch (err: any) {
+        console.error('Error compressing variant image:', err);
+      } finally {
+        setIsProcessingImage(false);
+      }
     }
   };
 
@@ -183,7 +204,7 @@ export default function ProductDetailModal({
           id="detalhes-modal-window"
           onClick={(e) => e.stopPropagation()}
         >
-          {/* Top Bar with < Detalhes Da Peça and User Profile */}
+          {/* Top Bar with < Detalhes Da Peça and Quick Actions */}
           <div className="flex items-center justify-between px-5 py-4 border-b border-white/5 bg-[#131315]/80 backdrop-blur-sm sticky top-0 z-20">
             <button
               onClick={onClose}
@@ -195,8 +216,33 @@ export default function ProductDetailModal({
               </span>
             </button>
 
-            <div className="w-9 h-9 rounded-full bg-[#ffdf97] flex items-center justify-center text-[#251a00] shadow-md">
-              <User className="w-5 h-5 fill-current" />
+            <div className="flex items-center gap-2">
+              {onOpenPrintTag && (
+                <button
+                  type="button"
+                  onClick={() => onOpenPrintTag(product, currentVariant)}
+                  className="p-2 rounded-full bg-[#1C1C1E] border border-white/10 text-[#ffd56d] hover:bg-[#ffd56d] hover:text-black transition cursor-pointer"
+                  title="Imprimir Etiqueta"
+                >
+                  <Printer className="w-4 h-4" />
+                </button>
+              )}
+              {onOpenEdit && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onOpenEdit(product);
+                  }}
+                  className="p-2 rounded-full bg-[#1C1C1E] border border-white/10 text-gray-300 hover:text-white hover:bg-white/10 transition cursor-pointer"
+                  title="Editar dados gerais do produto"
+                >
+                  <Edit className="w-4 h-4" />
+                </button>
+              )}
+              <div className="w-9 h-9 rounded-full bg-[#ffdf97] flex items-center justify-center text-[#251a00] shadow-md">
+                <User className="w-5 h-5 fill-current" />
+              </div>
             </div>
           </div>
 
@@ -433,38 +479,79 @@ export default function ProductDetailModal({
 
                   <div className="space-y-1">
                     <label className="block text-[10px] font-bold uppercase tracking-wider text-[#D4A017]">
-                      FOTO DO PRODUTO
+                      FOTO DA VARIAÇÃO
                     </label>
-                    <label className="w-full py-2.5 px-2 bg-[#141416] border border-white/10 hover:border-[#E5B842]/40 rounded-xl text-white text-[10px] font-bold transition flex items-center justify-center gap-1.5 cursor-pointer truncate">
-                      <Upload className="w-3.5 h-3.5 text-[#ffd56d] shrink-0" />
-                      <span className="truncate">Selecionar Foto</span>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => handleFileUpload(e, false)}
-                        className="hidden"
-                      />
-                    </label>
+                    {editVarImage ? (
+                      <div className="flex items-center gap-2 p-1.5 bg-[#141416] border border-[#ffd56d]/30 rounded-xl">
+                        <img
+                          src={editVarImage}
+                          alt="Prévia da variação"
+                          className="w-8 h-8 rounded-lg object-cover shrink-0 border border-white/10"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <label className="text-[10px] text-[#ffd56d] font-bold hover:underline flex items-center gap-1 cursor-pointer truncate">
+                            <FolderOpen className="w-3 h-3 shrink-0" />
+                            <span className="truncate">Trocar Foto</span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={(e) => handleFileUpload(e, false)}
+                              className="hidden"
+                            />
+                          </label>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setEditVarImage('')}
+                          className="text-[10px] text-red-400 hover:text-red-300 font-bold px-1"
+                          title="Remover foto"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ) : (
+                      <label className="w-full py-2.5 px-2 bg-[#141416] border border-white/10 hover:border-[#ffd56d]/50 rounded-xl text-white text-[10px] font-bold transition flex items-center justify-center gap-1.5 cursor-pointer truncate">
+                        <FolderOpen className="w-3.5 h-3.5 text-[#ffd56d] shrink-0" />
+                        <span className="truncate">{isProcessingImage ? 'Carregando...' : 'Selecionar da Galeria'}</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => handleFileUpload(e, false)}
+                          className="hidden"
+                        />
+                      </label>
+                    )}
                   </div>
                 </div>
 
-                {/* Edit Actions: Cancelar | Salvar */}
-                <div className="flex items-center justify-end gap-2 pt-2">
+                {/* Edit Actions: Excluir | Cancelar | Salvar */}
+                <div className="flex items-center justify-between gap-2 pt-2">
                   <button
                     type="button"
-                    onClick={() => setIsEditingVariant(false)}
-                    className="px-4 py-2 rounded-xl bg-[#141416] text-[#8E8E93] hover:text-white text-xs font-bold transition cursor-pointer"
+                    onClick={() => handleDeleteVariant(selectedVariantId)}
+                    className="px-3 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs font-bold transition cursor-pointer flex items-center gap-1.5 border border-red-500/20"
+                    title="Excluir esta variação"
                   >
-                    Cancelar
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Excluir</span>
                   </button>
-                  <button
-                    type="button"
-                    onClick={handleSaveEdit}
-                    className="px-6 py-2 rounded-xl bg-[#E5B842] hover:bg-[#ffd56d] text-[#121214] text-xs font-bold transition cursor-pointer flex items-center gap-1.5 shadow"
-                  >
-                    <Check className="w-3.5 h-3.5 stroke-[3]" />
-                    Salvar
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingVariant(false)}
+                      className="px-4 py-2 rounded-xl bg-[#141416] text-[#8E8E93] hover:text-white text-xs font-bold transition cursor-pointer"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSaveEdit}
+                      className="px-6 py-2 rounded-xl bg-[#E5B842] hover:bg-[#ffd56d] text-[#121214] text-xs font-bold transition cursor-pointer flex items-center gap-1.5 shadow"
+                    >
+                      <Check className="w-3.5 h-3.5 stroke-[3]" />
+                      Salvar
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -519,16 +606,46 @@ export default function ProductDetailModal({
                     <label className="block text-[10px] font-bold uppercase tracking-wider text-[#D4A017]">
                       FOTO DA VARIAÇÃO
                     </label>
-                    <label className="w-full py-2.5 px-2 bg-[#141416] border border-white/10 hover:border-[#E5B842]/40 rounded-xl text-white text-[10px] font-bold transition flex items-center justify-center gap-1.5 cursor-pointer truncate">
-                      <Upload className="w-3.5 h-3.5 text-[#ffd56d] shrink-0" />
-                      <span className="truncate">Escolher Foto</span>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => handleFileUpload(e, true)}
-                        className="hidden"
-                      />
-                    </label>
+                    {newVarImage ? (
+                      <div className="flex items-center gap-2 p-1.5 bg-[#141416] border border-[#ffd56d]/30 rounded-xl">
+                        <img
+                          src={newVarImage}
+                          alt="Prévia da nova variação"
+                          className="w-8 h-8 rounded-lg object-cover shrink-0 border border-white/10"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <label className="text-[10px] text-[#ffd56d] font-bold hover:underline flex items-center gap-1 cursor-pointer truncate">
+                            <FolderOpen className="w-3 h-3 shrink-0" />
+                            <span className="truncate">Trocar Foto</span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={(e) => handleFileUpload(e, true)}
+                              className="hidden"
+                            />
+                          </label>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setNewVarImage('')}
+                          className="text-[10px] text-red-400 hover:text-red-300 font-bold px-1"
+                          title="Remover foto"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ) : (
+                      <label className="w-full py-2.5 px-2 bg-[#141416] border border-white/10 hover:border-[#ffd56d]/50 rounded-xl text-white text-[10px] font-bold transition flex items-center justify-center gap-1.5 cursor-pointer truncate">
+                        <FolderOpen className="w-3.5 h-3.5 text-[#ffd56d] shrink-0" />
+                        <span className="truncate">{isProcessingImage ? 'Carregando...' : 'Selecionar da Galeria'}</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => handleFileUpload(e, true)}
+                          className="hidden"
+                        />
+                      </label>
+                    )}
                   </div>
                 </div>
 

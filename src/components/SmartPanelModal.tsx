@@ -13,6 +13,7 @@ import {
   Sparkles,
   Layers,
   Upload,
+  FolderOpen,
   Tag,
   CheckCircle2,
   Copy,
@@ -21,6 +22,7 @@ import {
 import { Product, ProductVariant } from '../types';
 import { generateUUID } from '../utils/uuid';
 import { generateVariantCode, generateVariantBarcode } from '../utils/variantCode';
+import { compressImageFile } from '../lib/imageUtils';
 
 interface SmartPanelModalProps {
   product: Product;
@@ -56,6 +58,7 @@ export default function SmartPanelModal({
 
   // Carousel scroll ref
   const carouselRef = useRef<HTMLDivElement>(null);
+  const [isProcessingImage, setIsProcessingImage] = useState(false);
 
   if (!isOpen) return null;
 
@@ -73,24 +76,28 @@ export default function SmartPanelModal({
 
   const totalProductValue = product.price * totalQuantity;
 
+  const [isProcessingImage, setIsProcessingImage] = useState(false);
+
   // Handle local image file upload for new variation
-  const handleFileUpload = (
+  const handleFileUpload = async (
     e: React.ChangeEvent<HTMLInputElement>,
     isEdit = false
   ) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        if (typeof reader.result === 'string') {
-          if (isEdit) {
-            setEditVarImage(reader.result);
-          } else {
-            setNewVarImage(reader.result);
-          }
+      try {
+        setIsProcessingImage(true);
+        const compressed = await compressImageFile(file, 800, 800, 0.82);
+        if (isEdit) {
+          setEditVarImage(compressed);
+        } else {
+          setNewVarImage(compressed);
         }
-      };
-      reader.readAsDataURL(file);
+      } catch (err: any) {
+        console.error('Error compressing image in SmartPanelModal:', err);
+      } finally {
+        setIsProcessingImage(false);
+      }
     }
   };
 
@@ -512,21 +519,43 @@ export default function SmartPanelModal({
                   />
                 </div>
 
-                {/* Variant Image URL / File Upload */}
+                {/* Variant Image Upload (Folder / Gallery) */}
                 <div className="sm:col-span-4 space-y-1">
                   <label className="block text-[10px] uppercase font-bold text-brand-primary">
                     Foto da Variação
                   </label>
-                  <div className="flex gap-1.5">
-                    <input
-                      type="text"
-                      placeholder="URL da Imagem..."
-                      value={newVarImage}
-                      onChange={(e) => setNewVarImage(e.target.value)}
-                      className="flex-1 bg-brand-bg border border-brand-tertiary rounded-xl px-3 py-2 text-xs text-brand-neutral focus:outline-none focus:border-brand-primary placeholder-gray-500"
-                    />
-                    <label className="px-3 py-2 bg-brand-tertiary hover:bg-brand-primary hover:text-black text-gray-300 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1 shrink-0">
-                      <Upload className="w-3.5 h-3.5" />
+                  {newVarImage ? (
+                    <div className="flex items-center gap-2 p-1.5 bg-brand-bg border border-brand-primary/40 rounded-xl">
+                      <img
+                        src={newVarImage}
+                        alt="Prévia"
+                        className="w-7 h-7 rounded-lg object-cover shrink-0 border border-brand-tertiary"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <label className="text-[10px] text-brand-primary font-bold hover:underline flex items-center gap-1 cursor-pointer truncate">
+                          <FolderOpen className="w-3 h-3 shrink-0" />
+                          <span className="truncate">Trocar Foto</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => handleFileUpload(e, false)}
+                            className="hidden"
+                          />
+                        </label>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setNewVarImage('')}
+                        className="text-[10px] text-red-400 hover:text-red-300 font-bold px-1"
+                        title="Remover foto"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="w-full py-2 px-2.5 bg-brand-bg border border-brand-tertiary hover:border-brand-primary/60 rounded-xl text-brand-neutral text-xs font-semibold transition flex items-center justify-center gap-1.5 cursor-pointer truncate">
+                      <FolderOpen className="w-3.5 h-3.5 text-brand-primary shrink-0" />
+                      <span className="truncate">{isProcessingImage ? 'Otimizando...' : 'Foto da Galeria'}</span>
                       <input
                         type="file"
                         accept="image/*"
@@ -534,7 +563,7 @@ export default function SmartPanelModal({
                         className="hidden"
                       />
                     </label>
-                  </div>
+                  )}
                 </div>
 
                 {/* Code Preview Note */}
@@ -602,22 +631,53 @@ export default function SmartPanelModal({
                               placeholder="Nome da Variação"
                               className="w-full bg-brand-bg border border-brand-primary rounded-lg px-2.5 py-1.5 text-xs text-brand-neutral focus:outline-none"
                             />
-                            <div className="flex gap-2">
+                            <div className="flex items-center gap-2">
                               <input
                                 type="number"
                                 min="0"
                                 value={editVarQty}
                                 onChange={(e) => setEditVarQty(Number(e.target.value))}
                                 placeholder="Qtd"
-                                className="w-24 bg-brand-bg border border-brand-primary rounded-lg px-2.5 py-1.5 text-xs font-mono font-bold text-brand-neutral focus:outline-none"
+                                className="w-20 bg-brand-bg border border-brand-primary rounded-lg px-2.5 py-1.5 text-xs font-mono font-bold text-brand-neutral focus:outline-none"
                               />
-                              <input
-                                type="text"
-                                value={editVarImage}
-                                onChange={(e) => setEditVarImage(e.target.value)}
-                                placeholder="URL Imagem"
-                                className="flex-1 bg-brand-bg border border-brand-primary rounded-lg px-2.5 py-1.5 text-xs text-brand-neutral focus:outline-none"
-                              />
+                              {editVarImage ? (
+                                <div className="flex-1 flex items-center gap-2 p-1 bg-brand-bg border border-brand-primary/40 rounded-lg">
+                                  <img
+                                    src={editVarImage}
+                                    alt="Prévia"
+                                    className="w-6 h-6 rounded object-cover shrink-0 border border-brand-tertiary"
+                                  />
+                                  <label className="flex-1 text-[10px] text-brand-primary font-bold hover:underline flex items-center gap-1 cursor-pointer truncate">
+                                    <FolderOpen className="w-3 h-3 shrink-0" />
+                                    <span className="truncate">Trocar Foto</span>
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      onChange={(e) => handleFileUpload(e, true)}
+                                      className="hidden"
+                                    />
+                                  </label>
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditVarImage('')}
+                                    className="text-[10px] text-red-400 hover:text-red-300 font-bold px-1"
+                                    title="Remover foto"
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+                              ) : (
+                                <label className="flex-1 py-1.5 px-2 bg-brand-bg border border-brand-tertiary hover:border-brand-primary/60 rounded-lg text-brand-neutral text-xs font-semibold transition flex items-center justify-center gap-1.5 cursor-pointer truncate">
+                                  <FolderOpen className="w-3.5 h-3.5 text-brand-primary shrink-0" />
+                                  <span className="truncate">{isProcessingImage ? 'Otimizando...' : 'Foto da Galeria'}</span>
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={(e) => handleFileUpload(e, true)}
+                                    className="hidden"
+                                  />
+                                </label>
+                              )}
                             </div>
                             <div className="flex justify-end gap-1.5 pt-1">
                               <button

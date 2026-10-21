@@ -12,17 +12,12 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 // 1. CATEGORIES
 // ==========================================
 export async function dbFetchCategories(): Promise<string[]> {
-  try {
-    const { data, error } = await supabase.from('categories').select('name');
-    if (error) {
-      console.warn('Supabase categories fetch warning:', error.message);
-      return [];
-    }
-    return data ? data.map((item) => item.name).filter(Boolean) : [];
-  } catch (err) {
-    console.error('Failed to fetch categories from Supabase:', err);
-    return [];
+  const { data, error } = await supabase.from('categories').select('name');
+  if (error) {
+    console.warn('Supabase categories fetch warning:', error.message);
+    throw new Error(error.message);
   }
+  return data ? data.map((item) => item.name).filter(Boolean) : [];
 }
 
 export async function dbAddCategory(name: string): Promise<{ success: boolean; error?: string }> {
@@ -81,17 +76,12 @@ export async function dbDeleteCategory(name: string): Promise<boolean> {
 // 2. SUPPLIERS
 // ==========================================
 export async function dbFetchSuppliers(): Promise<string[]> {
-  try {
-    const { data, error } = await supabase.from('suppliers').select('name');
-    if (error) {
-      console.warn('Supabase suppliers fetch warning:', error.message);
-      return [];
-    }
-    return data ? data.map((item) => item.name).filter(Boolean) : [];
-  } catch (err) {
-    console.error('Failed to fetch suppliers from Supabase:', err);
-    return [];
+  const { data, error } = await supabase.from('suppliers').select('name');
+  if (error) {
+    console.warn('Supabase suppliers fetch warning:', error.message);
+    throw new Error(error.message);
   }
+  return data ? data.map((item) => item.name).filter(Boolean) : [];
 }
 
 export async function dbAddSupplier(name: string): Promise<{ success: boolean; error?: string }> {
@@ -150,50 +140,45 @@ export async function dbDeleteSupplier(name: string): Promise<boolean> {
 // 3. PRODUCTS & VARIANTS
 // ==========================================
 export async function dbFetchProducts(): Promise<Product[]> {
-  try {
-    const { data: prods, error: prodErr } = await supabase.from('products').select('*').order('created_at', { ascending: false });
-    if (prodErr || !prods) {
-      console.warn('Supabase products fetch warning:', prodErr?.message);
-      return [];
-    }
-
-    const { data: variantsData, error: varErr } = await supabase.from('product_variants').select('*');
-    if (varErr) {
-      console.warn('Supabase product variants fetch warning:', varErr.message);
-    }
-
-    return prods.map((p) => {
-      const pVariants: ProductVariant[] = (variantsData || [])
-        .filter((v) => v.product_id === p.id)
-        .map((v) => ({
-          id: v.id,
-          name: v.name,
-          quantity: Number(v.quantity || 0),
-          imageUrl: v.image_url || undefined,
-          sku: v.sku || undefined,
-        }));
-
-      return {
-        id: p.id,
-        name: p.name,
-        sku: p.sku,
-        category: p.category,
-        supplier: p.supplier || 'Direto com Fabricante',
-        price: Number(p.price || 0),
-        costPrice: Number(p.cost_price || 0),
-        quantity: Number(p.quantity || 0),
-        minStock: Number(p.min_stock || 1),
-        imageUrl: p.image_url || '',
-        description: p.description || '',
-        salesCount: Number(p.sales_count || 0),
-        createdAt: p.created_at || new Date().toISOString(),
-        variants: pVariants.length > 0 ? pVariants : undefined,
-      };
-    });
-  } catch (err) {
-    console.error('Failed to fetch products from Supabase:', err);
-    return [];
+  const { data: prods, error: prodErr } = await supabase.from('products').select('*').order('created_at', { ascending: false });
+  if (prodErr || !prods) {
+    console.warn('Supabase products fetch warning:', prodErr?.message);
+    throw new Error(prodErr?.message || 'Erro ao consultar produtos');
   }
+
+  const { data: variantsData, error: varErr } = await supabase.from('product_variants').select('*');
+  if (varErr) {
+    console.warn('Supabase product variants fetch warning:', varErr.message);
+  }
+
+  return prods.map((p) => {
+    const pVariants: ProductVariant[] = (variantsData || [])
+      .filter((v) => v.product_id === p.id)
+      .map((v) => ({
+        id: v.id,
+        name: v.name,
+        quantity: Number(v.quantity || 0),
+        imageUrl: v.image_url || undefined,
+        sku: v.sku || undefined,
+      }));
+
+    return {
+      id: p.id,
+      name: p.name,
+      sku: p.sku,
+      category: p.category,
+      supplier: p.supplier || 'Direto com Fabricante',
+      price: Number(p.price || 0),
+      costPrice: Number(p.cost_price || 0),
+      quantity: Number(p.quantity || 0),
+      minStock: Number(p.min_stock || 1),
+      imageUrl: p.image_url || '',
+      description: p.description || '',
+      salesCount: Number(p.sales_count || 0),
+      createdAt: p.created_at || new Date().toISOString(),
+      variants: pVariants.length > 0 ? pVariants : undefined,
+    };
+  });
 }
 
 export async function dbSaveProduct(product: Product): Promise<{ success: boolean; error?: string }> {
@@ -364,16 +349,15 @@ export async function dbDeleteProduct(id: string): Promise<boolean> {
 // 4. TRANSACTIONS
 // ==========================================
 export async function dbFetchTransactions(): Promise<Transaction[]> {
-  try {
-    const { data, error } = await supabase
-      .from('transactions')
-      .select('*')
-      .order('created_at', { ascending: false });
+  const { data, error } = await supabase
+    .from('transactions')
+    .select('*')
+    .order('created_at', { ascending: false });
 
-    if (error || !data) {
-      console.warn('Supabase transactions fetch warning:', error?.message);
-      return [];
-    }
+  if (error || !data) {
+    console.warn('Supabase transactions fetch warning:', error?.message);
+    throw new Error(error?.message || 'Erro ao consultar transações');
+  }
 
     return data.map((t) => {
       // Calculate robust deterministic timestamp (never Date.now() to prevent false post-reset resurgence)
@@ -413,11 +397,7 @@ export async function dbFetchTransactions(): Promise<Transaction[]> {
         time: t.time,
         timestamp,
       };
-    });
-  } catch (err) {
-    console.error('Failed to fetch transactions from Supabase:', err);
-    return [];
-  }
+  });
 }
 
 export async function dbSaveTransaction(tx: Transaction): Promise<{ success: boolean; error?: string }> {
@@ -519,36 +499,31 @@ export async function dbResetProductsSalesCount(): Promise<boolean> {
 // 5. MONTHLY CLOSINGS
 // ==========================================
 export async function dbFetchMonthlyClosings(): Promise<MonthlyClosing[]> {
-  try {
-    const { data, error } = await supabase
-      .from('monthly_closings')
-      .select('*')
-      .order('closed_at', { ascending: false });
+  const { data, error } = await supabase
+    .from('monthly_closings')
+    .select('*')
+    .order('closed_at', { ascending: false });
 
-    if (error || !data) {
-      console.warn('Supabase monthly_closings fetch warning:', error?.message);
-      return [];
-    }
-
-    return data.map((c) => ({
-      id: c.id,
-      monthKey: c.month || c.month_key || '',
-      periodRef: c.period_ref || '',
-      closingDay: Number(c.closing_day || 30),
-      closedAt: c.closed_at || new Date().toISOString(),
-      closedAtFormatted: c.closed_at_formatted || new Date(c.closed_at).toLocaleDateString('pt-BR'),
-      totalRevenue: Number(c.total_revenue || 0),
-      totalQuantitySold: Number(c.total_quantity_sold || 0),
-      totalSalesCount: Number(c.total_sales_count || 0),
-      totalEntriesCount: Number(c.total_entries_count || 0),
-      topProducts: Array.isArray(c.top_products) ? c.top_products : [],
-      categoryBreakdown: Array.isArray(c.category_breakdown) ? c.category_breakdown : [],
-      isManual: Boolean(c.is_manual),
-    }));
-  } catch (err) {
-    console.error('Failed to fetch monthly closings from Supabase:', err);
-    return [];
+  if (error || !data) {
+    console.warn('Supabase monthly_closings fetch warning:', error?.message);
+    throw new Error(error?.message || 'Erro ao consultar fechamentos mensais');
   }
+
+  return data.map((c) => ({
+    id: c.id,
+    monthKey: c.month || c.month_key || '',
+    periodRef: c.period_ref || '',
+    closingDay: Number(c.closing_day || 30),
+    closedAt: c.closed_at || new Date().toISOString(),
+    closedAtFormatted: c.closed_at_formatted || new Date(c.closed_at).toLocaleDateString('pt-BR'),
+    totalRevenue: Number(c.total_revenue || 0),
+    totalQuantitySold: Number(c.total_quantity_sold || 0),
+    totalSalesCount: Number(c.total_sales_count || 0),
+    totalEntriesCount: Number(c.total_entries_count || 0),
+    topProducts: Array.isArray(c.top_products) ? c.top_products : [],
+    categoryBreakdown: Array.isArray(c.category_breakdown) ? c.category_breakdown : [],
+    isManual: Boolean(c.is_manual),
+  }));
 }
 
 export async function dbSaveMonthlyClosing(closing: MonthlyClosing): Promise<{ success: boolean; error?: string }> {
