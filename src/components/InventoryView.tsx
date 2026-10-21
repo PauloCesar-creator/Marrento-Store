@@ -1245,6 +1245,7 @@ export default function InventoryView({
           onOpenEdit={(p) => handleOpenEdit(p)}
           onOpenPrintTag={(p, v) => onOpenPrintTag && onOpenPrintTag(p, v)}
           onDeleteProduct={onDeleteProduct}
+          onAddToCart={onAddToCart}
         />
       )}
 
