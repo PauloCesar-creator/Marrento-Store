@@ -21,12 +21,19 @@ import {
   QrCode,
   Columns2,
   Columns3,
-  LayoutGrid
+  LayoutGrid,
+  Gem,
+  Mic,
+  User,
+  UserCheck,
+  Boxes
 } from 'lucide-react';
-import { Product, CategoryName } from '../types';
+import { Product, CategoryName, ProductVariant } from '../types';
 import ProductDetailModal from './ProductDetailModal';
 import NewItemModal from './NewItemModal';
 import { LUXURY_IMAGE_FALLBACK } from '../lib/imageUtils';
+import { useModalHistory } from '../utils/useModalHistory';
+import { CartItem } from './SalesPanelModal';
 
 interface FlyingDot {
   id: number;
@@ -63,9 +70,13 @@ interface InventoryViewProps {
   onOpenPrintTag?: (product: Product, variant?: any) => void;
   autoDeleteCategories?: string[];
   onToggleCategoryAutoDelete?: (categoryName: string) => void;
-  onAddToCart?: (product: Product, variant?: any) => void;
+  onAddToCart?: (product: Product, variant?: any, qtyToAdd?: number) => void;
   cartCount?: number;
   onOpenSalesPanel?: () => void;
+  cartItems?: CartItem[];
+  onOpenLogin?: () => void;
+  isAuthenticated?: boolean;
+  onLogout?: () => void;
 }
 
 export default function InventoryView({

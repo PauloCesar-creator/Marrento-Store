@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+
+<html lang="pt-BR"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/>
+<title>Detalhes Da Peça - Acervo de Luxo</title>
+<!-- Tailwind CSS v3 CDN com plugins -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Google Fonts: Playfair Display & Plus Jakarta Sans -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,600&amp;family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              gold: '#ffd56d',
+              goldPrimary: '#e5b842',
+              goldLight: '#f6be39',
+              goldDark: '#b88d28',
+              surface: '#131315',
+              surfaceCard: '#18181b',
+              border: '#27272a',
+              borderLight: '#353437',
+              muted: '#9a907c',
+            }
+          },
+          fontFamily: {
+            serif: ['"Playfair Display"', 'Georgia', 'serif'],
+            sans: ['"Plus Jakarta Sans"', '-apple-system', 'BlinkMacSystemFont', 'sans-serif']
+          }
+        }
+      }
+    }
+  </script>
+<style>
+    body {
+      background-color: #0b0b0d;
+      color: #e5e1e4;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+    ::-webkit-scrollbar {
+      display: none;
+    }
+    * {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+  </style>
+</head>
+<body class="flex justify-center min-h-screen bg-[#09090b] text-[#e5e1e4]">
+<!-- Container Mobile Viewport (390px padrão nativo iOS) -->
+<div class="w-full max-w-[390px] bg-[#131315] flex flex-col min-h-screen relative shadow-2xl border-x border-[#232328]">
+<!-- BEGIN: Header Superior -->
+<header class="sticky top-0 z-40 bg-[#131315]/90 backdrop-blur-md px-4 py-3 border-b border-[#232328] flex items-center justify-between" data-purpose="top-navigation">
+<!-- Ícone de Voltar (Seta fina chevron-left) -->
+<button aria-label="Voltar" class="w-10 h-10 rounded-full flex items-center justify-center text-zinc-300 hover:text-[#e5b842] hover:bg-white/5 active:scale-95 transition-all">
+<svg class="w-5 h-5 stroke-[2]" fill="none" stroke="currentColor" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M15.75 19.5L8.25 12l7.5-7.5" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</button>
+<!-- Título Centralizado Serifado -->
+<h1 class="text-lg font-serif font-semibold tracking-tight text-white flex-1 text-center">
+      Detalhes Da Peça
+    </h1>
+<!-- 3 Botões Circulares Táteis no Canto Direito -->
+<div class="flex items-center gap-1.5" data-purpose="header-action-buttons">
+<!-- Imprimir Etiqueta -->
+<button aria-label="Imprimir Etiqueta" class="w-9 h-9 rounded-full border border-[#2d2d35] bg-[#1a1a1f] flex items-center justify-center text-zinc-300 hover:text-[#e5b842] active:scale-95 transition-all">
+<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.8" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M6.72 13.829c-.24-1.018-.67-2.822.043-3.29.914-.6 3.298-.938 5.237-.938 1.939 0 4.323.338 5.237.938.713.468.284 2.272.044 3.29M6 18h12M6 14h12a2 2 0 002-2V8a2 2 0 00-2-2H6a2 2 0 00-2 2v4a2 2 0 002 2zm2-8V4a1 1 0 011-1h6a1 1 0 011 1v2" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</button>
+<!-- Editar Produto -->
+<button aria-label="Editar Produto" class="w-9 h-9 rounded-full border border-[#2d2d35] bg-[#1a1a1f] flex items-center justify-center text-zinc-300 hover:text-[#e5b842] active:scale-95 transition-all">
+<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.8" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</button>
+<!-- Foto de Perfil / Avatar -->
+<button aria-label="Perfil" class="w-9 h-9 rounded-full bg-gradient-to-tr from-[#c49830] to-[#f4d47c] p-[1.5px] flex items-center justify-center shadow-md active:scale-95 transition-all">
+<div class="w-full h-full rounded-full bg-[#1b1b20] flex items-center justify-center text-[#e5b842]">
+<svg class="w-4 h-4" fill="currentColor" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path clip-rule="evenodd" d="M7.5 6a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0zM3.751 20.105a8.25 8.25 0 0116.498 0 .75.75 0 01-.437.695A18.683 18.683 0 0112 22.5c-2.786 0-5.433-.608-7.812-1.7a.75.75 0 01-.437-.695z" fill-rule="evenodd"></path>
+</svg>
+</div>
+</button>
+</div>
+</header>
+<!-- END: Header Superior -->
+<!-- Conteúdo Principal Rolável -->
+<main class="flex-1 overflow-y-auto px-4 pt-4 pb-28 space-y-4">
+<!-- 2. FOTO PRINCIPAL & BADGES (HERO) -->
+<section class="relative rounded-2xl overflow-hidden border border-[#27272f] bg-[#18181c] shadow-lg shadow-black/50" data-purpose="product-hero-image">
+<div class="relative w-full aspect-[16/10] overflow-hidden bg-zinc-900">
+<!-- Foto de alta qualidade em moda luxo / vestuário premium -->
+<img alt="Camisa Emporio Armani EA7" class="w-full h-full object-cover object-center" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCJNPXEC9t8iYXbi1dkUmcJsNDzwpNYucOn5DaORB1H2Ch5UJcPB7KRdzRybjXE--KWQRGqRi--c0TEgR1uX2jQ8oa-3c7IoOear9bIyHl6ubdXVNLRoKzR49Lr5zw3VHD6SuFRYYZMs-Knfsbq-f6rbMcw7boB7YNu8dHuWTcP9PzYwbAUTXlEAZxov59ougdF0k6elcZ2RsLbaugNRyYEBLcl5_PAqqg-2L1WDtWjJUk66GkbYE6ouA"/>
+<!-- Gradiente de sombra inferior para legibilidade das badges -->
+<div class="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent pointer-events-none"></div>
+<!-- Badges sobrepostas no rodapé da foto -->
+<div class="absolute bottom-3 left-3 right-3 flex items-center justify-between gap-2 pointer-events-none">
+<!-- Badge escura translúcida à esquerda com ícone de etiqueta dourada -->
+<div class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/75 backdrop-blur-md border border-[#e5b842]/40 text-white shadow-sm pointer-events-auto max-w-[72%]">
+<svg class="w-3.5 h-3.5 text-[#e5b842] shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z" stroke-linecap="round" stroke-linejoin="round"></path>
+<path d="M6 6h.008v.008H6V6z" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+<span class="text-[11px] font-semibold tracking-wide uppercase text-zinc-100 truncate">
+              Camisa Emporio Armani EA7
+            </span>
+</div>
+<!-- Badge dourada brilhante à direita: 1 UN -->
+<div class="px-3 py-1 rounded-full bg-gradient-to-r from-[#ffd56d] to-[#e5b842] text-neutral-950 font-bold text-xs tracking-tight shadow-md flex items-center gap-1 shrink-0">
+<span class="text-black font-extrabold text-[13px]">1</span>
+<span class="text-[10px] uppercase font-semibold text-neutral-900">UN</span>
+</div>
+</div>
+</div>
+</section>
+<!-- 3. MINIATURAS DA GALERIA (Linha horizontal) -->
+<section class="flex items-center gap-2.5 pt-0.5" data-purpose="gallery-thumbnails">
+<!-- Miniatura 1 (Ativa com borda dourada #e5b842) -->
+<div class="relative w-14 h-14 rounded-xl p-[2px] bg-[#e5b842] shadow-md ring-2 ring-[#e5b842]/30 cursor-pointer shrink-0">
+<div class="w-full h-full rounded-[10px] overflow-hidden bg-zinc-900">
+<img alt="Miniatura 1" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAEvfwQIpnuMzG0JF8i3Z9AWi-Y-D7OsK38gMr01RcD5nn715csIVyGMgtMivdBPdsln63xxkak1AYflxMn_IrKJbXIryELNWxGeYkcHSTyi0I-2VGanKwK_Jprp42e-yTJJqA4EHofU6XGq3I9h7FSQ67k7O0UrQeaUtKTKHbFejErHfcqD9sum_uG1E_-KfmsmnOR4yg65G0kj73LL_IDteocH25pvOgrki9ld1VDFRk_aFxPrmRQPQ"/>
+</div>
+</div>
+<!-- Miniatura 2 -->
+<div class="relative w-14 h-14 rounded-xl p-[1px] bg-[#2d2d35] hover:border-[#e5b842]/50 cursor-pointer shrink-0 transition-colors">
+<div class="w-full h-full rounded-[11px] overflow-hidden bg-zinc-900">
+<img alt="Miniatura 2" class="w-full h-full object-cover opacity-85 hover:opacity-100" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAQf3iPn9DoptlswYhdjDshvHC9CbevFUUqYfk-A6DdIiKTi86pYrGpLbkzkG0adeamlqB2RhqchWVDw3GEgKPAkZL-EWUObSdG9rtMm4v7VQSJ_thdpXAW35KhMcr76C2DrumQgM-tfuQjCsVg-8fk6hgiqtZN5WQVisEim2s7wR9e5GJA8zwuHpL5MIKH_zy49Mz8yWd-ggDKvNe8tBlQLahITAYku-4eRj6mvKcIm4LdfZ98555d8w"/>
+</div>
+</div>
+<!-- Miniatura 3 -->
+<div class="relative w-14 h-14 rounded-xl p-[1px] bg-[#2d2d35] hover:border-[#e5b842]/50 cursor-pointer shrink-0 transition-colors">
+<div class="w-full h-full rounded-[11px] overflow-hidden bg-zinc-900">
+<img alt="Miniatura 3" class="w-full h-full object-cover opacity-85 hover:opacity-100" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAqKkQpDo6-veK8D7lOgtget4QfnoceHGFuEUfBFuchWcEhbJHR_j8azMRSljrW_2m6EDDSh3tjUbC4rrcMtRnlFk-Jx728n4_ffv40jLJ847eYrJr41HFOunw2B08MRaxv4HlYuhQg0tRIlVRSc6_A-TCJuwSECSQoINcugSJgOJo6mHXyfr71IvYJjGO8mHNubUtNhkpa7FxaRqDgByXBhTFqUtmOrql0KC-QALx8i33WOfhz_yOK1Q"/>
+</div>
+</div>
+<!-- Botão Quadrado Pontilhado com Ícone '+' para Adicionar Mais Fotos -->
+<button aria-label="Adicionar Foto" class="w-14 h-14 rounded-xl border border-dashed border-[#3d3d47] hover:border-[#e5b842] flex flex-col items-center justify-center text-zinc-400 hover:text-[#e5b842] transition-colors bg-[#18181c]/50 active:scale-95 shrink-0">
+<svg class="w-5 h-5 stroke-[2]" fill="none" stroke="currentColor" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M12 4.5v15m7.5-7.5h-15" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</button>
+</section>
+<!-- 4. BLOCO DE DADOS PRINCIPAIS -->
+<section class="space-y-2 pt-1" data-purpose="product-meta-data">
+<!-- Linha sutil: Catálogo Atelier e SKU -->
+<div class="flex items-center justify-between text-xs tracking-wider uppercase">
+<span class="text-[#e5b842] font-bold flex items-center gap-1.5 text-[11px]">
+<span class="w-1.5 h-1.5 rounded-full bg-[#e5b842] inline-block"></span>
+          CATÁLOGO ATELIER
+        </span>
+<span class="text-zinc-500 font-mono tracking-widest text-[11px]">SKU: SK-391-CA</span>
+</div>
+<!-- Título Imponente -->
+<h2 class="text-2xl font-serif font-semibold text-white leading-tight tracking-tight">
+        Camisa Emporio Armani EA7 PRETA
+      </h2>
+<!-- Preço & Badge de Preço -->
+<div class="flex items-center gap-3 pt-1">
+<div class="flex items-baseline text-[#e5b842] font-serif text-[28px] font-bold tracking-tight">
+<span class="text-xl font-sans font-semibold mr-1.5">R$</span>180,00
+        </div>
+<span class="px-2.5 py-1 rounded-md bg-[#1f1f25] border border-[#2d2d35] text-[10px] font-semibold tracking-wider text-zinc-300 uppercase">
+          PREÇO UNITÁRIO FIXO
+        </span>
+</div>
+</section>
+<div class="h-[1px] bg-[#232328] my-1"></div>
+<!-- 5. SEÇÃO DE VARIAÇÕES (COR / MODELO) -->
+<section class="space-y-2.5" data-purpose="variant-selection">
+<div class="flex items-center justify-between text-xs font-semibold">
+<div class="flex items-center gap-1.5 text-[#e5b842] uppercase tracking-wider text-[11px]">
+<span>◆</span>
+<span>SELECIONE A VARIAÇÃO (COR / MODELO)</span>
+</div>
+<span class="text-zinc-500 font-normal text-xs">0 variantes</span>
+</div>
+<!-- Botão estilizado pontilhado de toque fácil em largura total -->
+<button class="w-full py-3.5 px-4 rounded-xl border border-dashed border-[#e5b842]/70 hover:border-[#e5b842] bg-[#e5b842]/5 hover:bg-[#e5b842]/10 text-white font-medium text-sm flex items-center justify-center gap-2 active:scale-[0.99] transition-all shadow-sm group" type="button">
+<svg class="w-4 h-4 text-[#e5b842] group-hover:scale-110 transition-transform stroke-[2.2]" fill="none" stroke="currentColor" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M12 4.5v15m7.5-7.5h-15" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+<span class="font-semibold tracking-wide text-zinc-100">Nova Variação</span>
+</button>
+</section>
+<!-- 6. CARD DE INFORMAÇÕES DE ESTOQUE -->
+<section class="rounded-xl bg-[#18181b] border border-[#27272a] p-4 space-y-3 shadow-md" data-purpose="summary-card">
+<!-- Linha 1: Variação Ativa -->
+<div class="flex items-center justify-between text-sm">
+<span class="text-zinc-400 font-normal">Variação Ativa:</span>
+<span class="text-white font-medium tracking-wide bg-[#222227] px-3 py-1 rounded-md border border-[#2c2c36] text-xs">
+          Geral (Base)
+        </span>
+</div>
+<div class="h-[1px] bg-[#222228] w-full"></div>
+<!-- Linha 2: Estoque Total Somado -->
+<div class="flex items-center justify-between text-sm">
+<span class="text-zinc-400 font-normal">Estoque Total Somado:</span>
+<div class="flex items-baseline gap-1">
+<span class="text-[#e5b842] font-extrabold text-lg">1</span>
+<span class="text-zinc-400 text-xs font-semibold tracking-wider">UNID.</span>
+</div>
+</div>
+</section>
+</main>
+<!-- 7. BARRA DE AÇÃO INFERIOR (Fixed Bottom Bar) -->
+<footer class="fixed bottom-0 left-0 right-0 z-40 bg-[#131315]/95 backdrop-blur-lg border-t border-[#232328] px-4 py-3 flex items-center justify-between gap-4 max-w-[390px] mx-auto" data-purpose="action-bar-footer">
+<!-- À esquerda: QTD. TOTAL -->
+<div class="flex flex-col shrink-0">
+<span class="text-[10px] tracking-wider uppercase text-zinc-500 font-semibold">QTD. TOTAL:</span>
+<div class="flex items-baseline gap-1">
+<span class="text-[#e5b842] font-extrabold text-xl leading-tight">1</span>
+<span class="text-xs font-semibold text-zinc-300">UN</span>
+</div>
+</div>
+<!-- À direita: Botão primário largo e ergonômico dourado ("✓ CONCLUÍDO") -->
+<button class="flex-1 py-3.5 px-6 rounded-xl bg-gradient-to-r from-[#ffd56d] via-[#e5b842] to-[#b88d28] text-neutral-950 font-bold text-sm tracking-wide shadow-lg shadow-[#e5b842]/20 active:scale-95 transition-all flex items-center justify-center gap-2 hover:brightness-105" data-purpose="submit-button" type="button">
+<svg class="w-4 h-4 stroke-[3] text-neutral-950" fill="none" stroke="currentColor" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M4.5 12.75l6 6 9-13.5" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+<span class="uppercase font-extrabold tracking-wider">CONCLUÍDO</span>
+</button>
+</footer>
+</div>
+</body></html>

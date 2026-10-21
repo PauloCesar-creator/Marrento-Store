@@ -22,7 +22,8 @@ import {
   RotateCcw,
   CheckCircle2,
   Trash2,
-  ShoppingCart
+  ShoppingCart,
+  Info
 } from 'lucide-react';
 import { Product, ProductVariant, Transaction } from '../types';
 import { playScanBeep } from '../utils/barcodeUtils';
@@ -99,6 +100,9 @@ export default function SalesPanelModal({
 
   // Variant picker inline modal when user clicks a product with multiple variants
   const [pickingProductVariants, setPickingProductVariants] = useState<Product | null>(null);
+
+  // Brief product info preview modal when clicking cart item
+  const [previewCartItem, setPreviewCartItem] = useState<CartItem | null>(null);
 
   // Success completed sale state
   const [completedSale, setCompletedSale] = useState<{
@@ -219,16 +223,22 @@ export default function SalesPanelModal({
     setCart([]);
   };
 
-  // Sync cart changes to external onUpdateCart handler
+  // Keep onUpdateCart in ref to prevent infinite loop or re-render cascade
+  const onUpdateCartRef = useRef(onUpdateCart);
   useEffect(() => {
-    if (onUpdateCart) {
-      onUpdateCart(cart);
-    }
-  }, [cart, onUpdateCart]);
+    onUpdateCartRef.current = onUpdateCart;
+  });
 
-  // Initialize or reset when modal opens
+  // Sync cart changes to external onUpdateCart handler without recreating effect
   useEffect(() => {
-    if (isOpen) {
+    onUpdateCartRef.current?.(cart);
+  }, [cart]);
+
+  const prevIsOpenRef = useRef(false);
+
+  // Initialize or reset ONLY when modal transitions from closed to open
+  useEffect(() => {
+    if (isOpen && !prevIsOpenRef.current) {
       setCompletedSale(null);
       setError('');
       setGlobalDiscount(0);
@@ -237,6 +247,7 @@ export default function SalesPanelModal({
       setIsSearching(false);
       setBipInput('');
       setPickingProductVariants(null);
+      setPreviewCartItem(null);
 
       // If opened with an initial product
       if (initialProductId) {
@@ -262,7 +273,8 @@ export default function SalesPanelModal({
         setCart(initialCartItems);
       }
     }
-  }, [isOpen, initialProductId, initialVariantId, initialCartItems]);
+    prevIsOpenRef.current = isOpen;
+  }, [isOpen, initialProductId, initialVariantId, products]);
 
   // Fast barcode / SKU / unique code scan lookup
   const handleProcessBipScan = (codeToSearch: string) => {
@@ -978,15 +990,19 @@ export default function SalesPanelModal({
                           key={item.id}
                           className="p-3 rounded-2xl bg-[#161618] border border-white/10 flex items-center justify-between gap-3 group hover:border-[#ffd56d]/30 transition"
                         >
-                          {/* Item Thumbnail & Info */}
-                          <div className="flex items-center gap-3 min-w-0 flex-1">
+                          {/* Item Thumbnail & Info (Clickable for brief product details modal) */}
+                          <div
+                            onClick={() => setPreviewCartItem(item)}
+                            className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer group/item hover:opacity-90 transition"
+                            title="Clique para ver breves informações da peça"
+                          >
                             <img
                               src={item.variant?.imageUrl || item.product.imageUrl}
                               alt={item.product.name}
-                              className="w-11 h-11 rounded-xl object-cover shrink-0 border border-white/10 bg-black"
+                              className="w-11 h-11 rounded-xl object-cover shrink-0 border border-white/10 group-hover/item:border-[#ffd56d]/60 bg-black transition"
                             />
                             <div className="truncate">
-                              <h4 className="font-serif font-bold text-xs sm:text-sm text-white truncate">
+                              <h4 className="font-serif font-bold text-xs sm:text-sm text-white group-hover/item:text-[#ffd56d] transition truncate">
                                 {item.product.name}
                               </h4>
                               <div className="flex items-center gap-1.5 text-[10px] text-gray-400 mt-0.5">
@@ -1000,7 +1016,7 @@ export default function SalesPanelModal({
                                 </span>
                               </div>
                               <span className="text-[10px] text-gray-400 font-mono block mt-0.5">
-                                Máx estoque: {item.availableStock} un
+                                Máx estoque: {item.availableStock} un &bull; <span className="text-[#ffd56d] underline underline-offset-2">Ver detalhes</span>
                               </span>
                             </div>
                           </div>
@@ -1162,6 +1178,122 @@ export default function SalesPanelModal({
             </form>
           )}
         </motion.div>
+
+        {/* Modal Breves Informações do Produto do Carrinho (Requirement 4) */}
+        <AnimatePresence>
+          {previewCartItem && (
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4"
+              onClick={() => setPreviewCartItem(null)}
+            >
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 bg-black/80 backdrop-blur-sm"
+              />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.94, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.94, y: 10 }}
+                transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+                onClick={(e) => e.stopPropagation()}
+                className="relative z-10 w-full max-w-sm bg-[#161618] border border-[#ffd56d]/40 rounded-2xl sm:rounded-3xl p-5 shadow-2xl flex flex-col space-y-4"
+              >
+                {/* Header */}
+                <div className="flex items-center justify-between pb-3 border-b border-white/10">
+                  <div className="flex items-center gap-2">
+                    <span className="p-1.5 rounded-lg bg-[#ffd56d]/15 text-[#ffd56d]">
+                      <Info className="w-4 h-4" />
+                    </span>
+                    <h3 className="font-serif font-bold text-base text-white">
+                      Informações da Peça
+                    </h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setPreviewCartItem(null)}
+                    className="p-1.5 rounded-lg bg-white/5 hover:bg-white/15 text-gray-400 hover:text-white transition cursor-pointer"
+                    title="Fechar"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Image */}
+                <div className="relative h-44 w-full rounded-xl overflow-hidden bg-black/80 border border-white/10">
+                  <img
+                    src={previewCartItem.variant?.imageUrl || previewCartItem.product.imageUrl}
+                    alt={previewCartItem.product.name}
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute top-2 right-2 px-2 py-0.5 rounded-md text-[10px] font-bold bg-[#ffd56d] text-black shadow">
+                    {previewCartItem.availableStock} un em estoque
+                  </div>
+                </div>
+
+                {/* Details */}
+                <div className="space-y-2 text-xs">
+                  <div>
+                    <span className="text-[10px] text-[#D4A017] uppercase tracking-wider font-bold">
+                      {previewCartItem.product.category || 'Geral'}
+                    </span>
+                    <h4 className="font-serif font-bold text-sm text-white">
+                      {previewCartItem.product.name}
+                    </h4>
+                    {previewCartItem.variant && (
+                      <span className="inline-block px-2 py-0.5 mt-1 rounded bg-[#D4A017]/20 text-[#ffd56d] font-bold text-[11px] border border-[#D4A017]/40">
+                        Variação: {previewCartItem.variant.name}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 p-2.5 rounded-xl bg-black/40 border border-white/5 text-[11px]">
+                    <div>
+                      <span className="text-gray-500 block">SKU / Código:</span>
+                      <span className="font-mono text-gray-200 font-bold truncate block">
+                        {previewCartItem.variant?.code || previewCartItem.variant?.sku || previewCartItem.product.sku}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 block">Preço Unitário:</span>
+                      <span className="font-serif text-[#ffd56d] font-bold block">
+                        {formatBRL(previewCartItem.unitPrice)}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 block">Fornecedor:</span>
+                      <span className="text-gray-300 font-medium truncate block">
+                        {previewCartItem.product.supplier || 'Marento Store'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 block">No Carrinho:</span>
+                      <span className="text-emerald-400 font-bold block">
+                        {previewCartItem.quantity} un
+                      </span>
+                    </div>
+                  </div>
+
+                  {previewCartItem.product.description && (
+                    <p className="text-[11px] text-gray-400 line-clamp-2 pt-1">
+                      {previewCartItem.product.description}
+                    </p>
+                  )}
+                </div>
+
+                {/* Big Close Button */}
+                <button
+                  type="button"
+                  onClick={() => setPreviewCartItem(null)}
+                  className="w-full py-2.5 rounded-xl bg-[#ffd56d] hover:bg-[#ffe18d] text-black font-bold text-xs uppercase tracking-wider transition cursor-pointer shadow-md"
+                >
+                  Fechar
+                </button>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
       </div>
     </AnimatePresence>
   );

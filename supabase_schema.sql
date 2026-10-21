@@ -225,3 +225,13 @@ DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.transactions; E
 DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.notifications; EXCEPTION WHEN OTHERS THEN NULL; END $$;
 DO $$ BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.monthly_closings; EXCEPTION WHEN OTHERS THEN NULL; END $$;
 
+-- ==============================================================================
+-- 12. GARANTIA DE ARMAZENAMENTO DE IMAGENS (TEXT ILIMITADO PARA FOTOS COMPACTADAS)
+-- ==============================================================================
+ALTER TABLE IF EXISTS public.products ADD COLUMN IF NOT EXISTS image_url TEXT;
+ALTER TABLE IF EXISTS public.products ALTER COLUMN image_url TYPE TEXT;
+
+ALTER TABLE IF EXISTS public.product_variants ADD COLUMN IF NOT EXISTS image_url TEXT;
+ALTER TABLE IF EXISTS public.product_variants ALTER COLUMN image_url TYPE TEXT;
+
+
