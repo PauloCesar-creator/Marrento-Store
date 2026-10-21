@@ -209,25 +209,47 @@ export default function EntryFormView({
                     className="absolute inset-0 w-full h-full object-cover opacity-80"
                     id="entry-photo-preview"
                   />
-                  <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 gap-2" id="entry-photo-hover-overlay">
-                    <label className="flex items-center gap-1 px-3 py-1.5 bg-brand-primary text-black font-bold text-[10px] rounded-lg cursor-pointer hover:bg-brand-primary/95 transition">
-                      <Upload className="w-3.5 h-3.5" />
-                      Alterar Arquivo
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handleFileChange}
-                        className="hidden"
-                      />
-                    </label>
-                    <button
-                      type="button"
-                      onClick={handlePresetPhoto}
-                      className="flex items-center gap-1 px-3 py-1.5 bg-brand-secondary text-white border border-brand-tertiary font-bold text-[10px] rounded-lg cursor-pointer hover:bg-brand-secondary/80 transition"
-                    >
-                      <Sparkles className="w-3.5 h-3.5 text-brand-primary" />
-                      Foto Exemplo
-                    </button>
+                  <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 gap-2 p-2" id="entry-photo-hover-overlay">
+                    <div className="flex flex-wrap items-center justify-center gap-2">
+                      <label className="flex items-center gap-1 px-3 py-1.5 bg-brand-primary text-black font-bold text-[10px] rounded-lg cursor-pointer hover:bg-brand-primary/95 transition shadow">
+                        <Camera className="w-3.5 h-3.5" />
+                        Tirar Foto
+                        <input
+                          type="file"
+                          accept="image/*"
+                          capture="environment"
+                          onChange={handleFileChange}
+                          className="hidden"
+                        />
+                      </label>
+                      <label className="flex items-center gap-1 px-3 py-1.5 bg-brand-primary text-black font-bold text-[10px] rounded-lg cursor-pointer hover:bg-brand-primary/95 transition shadow">
+                        <Upload className="w-3.5 h-3.5" />
+                        Da Galeria
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleFileChange}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handlePresetPhoto}
+                        className="flex items-center gap-1 px-3 py-1 bg-brand-secondary text-white border border-brand-tertiary font-bold text-[10px] rounded-lg cursor-pointer hover:bg-brand-secondary/80 transition"
+                      >
+                        <Sparkles className="w-3 h-3 text-brand-primary" />
+                        Foto Exemplo
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setImageUrl('')}
+                        className="px-2 py-1 bg-red-500/20 text-red-300 border border-red-500/30 font-bold text-[10px] rounded-lg cursor-pointer hover:bg-red-500/30 transition"
+                      >
+                        Remover
+                      </button>
+                    </div>
                   </div>
                 </>
               ) : (
@@ -238,7 +260,18 @@ export default function EntryFormView({
                   <span className="block text-xs font-semibold text-brand-primary mb-2" id="entry-photo-upload-lbl">
                     Adicionar Foto do Produto
                   </span>
-                  <div className="flex justify-center gap-2">
+                  <div className="flex flex-wrap justify-center gap-2">
+                    <label className="flex items-center gap-1 px-3 py-2 bg-brand-primary text-black font-sans font-bold text-[10px] rounded-xl cursor-pointer hover:bg-brand-primary/90 transition shadow-md">
+                      <Camera className="w-3.5 h-3.5" />
+                      Tirar Foto
+                      <input
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        onChange={handleFileChange}
+                        className="hidden"
+                      />
+                    </label>
                     <label className="flex items-center gap-1 px-3 py-2 bg-brand-primary text-black font-sans font-bold text-[10px] rounded-xl cursor-pointer hover:bg-brand-primary/90 transition shadow-md">
                       <Upload className="w-3.5 h-3.5" />
                       Escolher da Galeria
@@ -255,7 +288,7 @@ export default function EntryFormView({
                       className="flex items-center gap-1 px-3 py-2 bg-brand-secondary text-white border border-brand-tertiary font-sans font-bold text-[10px] rounded-xl cursor-pointer hover:bg-brand-tertiary transition shadow-md"
                     >
                       <Sparkles className="w-3.5 h-3.5 text-brand-primary" />
-                      Foto Exemplo
+                      Exemplo
                     </button>
                   </div>
                 </div>

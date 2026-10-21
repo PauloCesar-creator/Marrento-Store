@@ -1,3 +1,5 @@
+import heic2any from 'heic2any';
+
 /**
  * Helper to compress and optimize image files from mobile camera or gallery.
  * Handles high-resolution phone camera photos (12MP-48MP), varying MIME types (HEIC/raw),
@@ -24,12 +26,12 @@ export function isImageFile(file: File): boolean {
     return true;
   }
   const name = file.name.toLowerCase();
-  return /\.(jpg|jpeg|png|webp|heic|heif|gif|bmp|avif)$/i.test(name);
+  return /\.(jpg|jpeg|png|webp|heic|heif|gif|bmp|avif|jfif|pjpeg|pjp)$/i.test(name);
 }
 
 /**
  * Compresses an image file from phone camera or gallery using an offscreen canvas.
- * Uses URL.createObjectURL for memory-efficient loading on mobile devices.
+ * Handles iPhone HEIC/HEIF files, uses createImageBitmap when available, and falls back to HTMLImageElement.
  */
 export async function compressImageFile(
   file: File,
@@ -41,28 +43,71 @@ export async function compressImageFile(
     throw new Error('O arquivo selecionado não é uma imagem suportada.');
   }
 
-  return new Promise((resolve, reject) => {
-    // Create an object URL for memory efficiency on mobile
-    const objectUrl = URL.createObjectURL(file);
-    const img = new Image();
+  let processableBlob: Blob = file;
 
-    // Clean up object URL when done
-    const cleanup = () => {
+  // 1. Detect and transcode iPhone / iPad HEIC or HEIF files to standard JPEG Blob
+  const fileName = (file.name || '').toLowerCase();
+  const fileType = (file.type || '').toLowerCase();
+  const isHeic =
+    fileType.includes('heic') ||
+    fileType.includes('heif') ||
+    /\.(heic|heif)$/i.test(fileName);
+
+  if (isHeic) {
+    try {
+      const conversionResult = await heic2any({
+        blob: file,
+        toType: 'image/jpeg',
+        quality: 0.85,
+      });
+      processableBlob = Array.isArray(conversionResult) ? conversionResult[0] : conversionResult;
+    } catch (heicErr) {
+      console.warn('[imageUtils] heic2any conversion fallback warning:', heicErr);
+    }
+  }
+
+  // 2. Fast-path: Try createImageBitmap (hardware-accelerated and handles orientation automatically)
+  if (typeof createImageBitmap !== 'undefined') {
+    try {
+      // Use resize hint if supported to keep mobile memory consumption minimal
+      let bitmap: ImageBitmap;
       try {
-        URL.revokeObjectURL(objectUrl);
+        bitmap = await createImageBitmap(processableBlob, {
+          resizeWidth: maxWidth * 2,
+          resizeQuality: 'high',
+        });
       } catch {
-        // ignore
+        bitmap = await createImageBitmap(processableBlob);
       }
-    };
+      const base64 = renderToCompressedCanvas(bitmap, maxWidth, maxHeight, quality);
+      bitmap.close();
+      return base64;
+    } catch (bitmapErr) {
+      console.warn('[imageUtils] createImageBitmap fallback to Image/FileReader:', bitmapErr);
+    }
+  }
 
-    img.onerror = () => {
-      cleanup();
-      // If object URL fails (e.g. older browser or specific format), fallback to FileReader
+  // 3. Standard path: HTMLImageElement with URL.createObjectURL
+  return new Promise((resolve, reject) => {
+    let objectUrl: string | null = null;
+    try {
+      objectUrl = URL.createObjectURL(processableBlob);
+    } catch (urlErr) {
+      console.warn('[imageUtils] URL.createObjectURL failed, trying FileReader direct:', urlErr);
+    }
+
+    const tryFileReader = () => {
       const reader = new FileReader();
-      reader.onerror = () => reject(new Error('Falha ao ler a imagem da câmera ou galeria.'));
+      reader.onerror = () => reject(new Error('Falha ao ler o arquivo de foto do aparelho.'));
       reader.onload = () => {
         const fallbackImg = new Image();
-        fallbackImg.onerror = () => reject(new Error('Formato de foto não suportado pelo navegador.'));
+        fallbackImg.onerror = () => {
+          reject(
+            new Error(
+              'Formato de foto não suportado pelo navegador. Tente selecionar em formato JPG, PNG ou WebP.'
+            )
+          );
+        };
         fallbackImg.onload = () => {
           try {
             const result = renderToCompressedCanvas(fallbackImg, maxWidth, maxHeight, quality);
@@ -73,7 +118,28 @@ export async function compressImageFile(
         };
         fallbackImg.src = reader.result as string;
       };
-      reader.readAsDataURL(file);
+      reader.readAsDataURL(processableBlob);
+    };
+
+    if (!objectUrl) {
+      tryFileReader();
+      return;
+    }
+
+    const img = new Image();
+    const cleanup = () => {
+      if (objectUrl) {
+        try {
+          URL.revokeObjectURL(objectUrl);
+        } catch {
+          // ignore
+        }
+      }
+    };
+
+    img.onerror = () => {
+      cleanup();
+      tryFileReader();
     };
 
     img.onload = () => {
@@ -91,17 +157,16 @@ export async function compressImageFile(
 }
 
 /**
- * Draws an Image element to canvas with aspect ratio preservation and compresses to JPEG.
- * If size exceeds 90KB, automatically scales down to guarantee stability.
+ * Draws an Image or ImageBitmap element to canvas with aspect ratio preservation and compresses to JPEG.
  */
 function renderToCompressedCanvas(
-  img: HTMLImageElement,
+  img: HTMLImageElement | ImageBitmap,
   maxWidth: number,
   maxHeight: number,
   quality: number
 ): string {
-  let width = img.naturalWidth || img.width;
-  let height = img.naturalHeight || img.height;
+  let width = (img as HTMLImageElement).naturalWidth || img.width;
+  let height = (img as HTMLImageElement).naturalHeight || img.height;
 
   if (!width || !height) {
     width = 600;
@@ -130,7 +195,7 @@ function renderToCompressedCanvas(
     throw new Error('Não foi possível inicializar o processador de imagem.');
   }
 
-  // Fill canvas with white background in case source had transparent pixels (PNG to JPEG conversion)
+  // Fill canvas with dark background
   ctx.fillStyle = '#141416';
   ctx.fillRect(0, 0, width, height);
 

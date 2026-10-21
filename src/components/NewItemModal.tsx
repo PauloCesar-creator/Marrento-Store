@@ -490,10 +490,21 @@ export default function NewItemModal({
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-semibold text-white truncate">Foto Otimizada com Sucesso</p>
                     <p className="text-[10px] text-emerald-400 font-mono">Pronta para sincronizar e salvar</p>
-                    <div className="flex items-center gap-2 mt-1.5">
-                      <label className="text-[10px] text-[#ffd56d] hover:underline flex items-center gap-1 cursor-pointer font-bold">
-                        <Camera className="w-3.5 h-3.5" />
-                        <span>Trocar foto</span>
+                    <div className="flex flex-wrap items-center gap-2.5 mt-2">
+                      <label className="text-[10px] text-[#ffd56d] hover:text-white flex items-center gap-1 cursor-pointer font-bold bg-[#1C1C1E] px-2.5 py-1 rounded-lg border border-[#ffd56d]/30 transition">
+                        <Camera className="w-3 h-3 text-[#ffd56d]" />
+                        <span>Tirar Foto</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          capture="environment"
+                          onChange={handleFileUpload}
+                          className="hidden"
+                        />
+                      </label>
+                      <label className="text-[10px] text-[#ffd56d] hover:text-white flex items-center gap-1 cursor-pointer font-bold bg-[#1C1C1E] px-2.5 py-1 rounded-lg border border-[#ffd56d]/30 transition">
+                        <FolderOpen className="w-3 h-3 text-[#ffd56d]" />
+                        <span>Da Galeria</span>
                         <input
                           type="file"
                           accept="image/*"
@@ -501,11 +512,10 @@ export default function NewItemModal({
                           className="hidden"
                         />
                       </label>
-                      <span className="text-[#8E8E93] text-[10px]">&bull;</span>
                       <button
                         type="button"
                         onClick={() => setImageUrl('')}
-                        className="text-[10px] text-red-400 hover:underline cursor-pointer"
+                        className="text-[10px] text-red-400 hover:text-red-300 font-bold px-1.5 py-1 cursor-pointer transition"
                       >
                         Remover
                       </button>

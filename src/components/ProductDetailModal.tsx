@@ -57,6 +57,7 @@ export default function ProductDetailModal({
       setIsEditingVariant(false);
       setIsAddingNewVar(false);
       setIsConfirmingDelete(false);
+      setPhotoSourceTarget(null);
     }
   }, [product?.id]);
 
@@ -73,6 +74,11 @@ export default function ProductDetailModal({
   const [newVarImage, setNewVarImage] = useState('');
   const [isProcessingImage, setIsProcessingImage] = useState(false);
   const [imageError, setImageError] = useState('');
+
+  // Photo source selector modal state ('mainProduct' | 'editVar' | 'newVar')
+  const [photoSourceTarget, setPhotoSourceTarget] = useState<'mainProduct' | 'editVar' | 'newVar' | null>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
 
   // Delete product confirmation state
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
@@ -215,6 +221,15 @@ export default function ProductDetailModal({
         setNewVarImage(compressed);
       } else if (target === 'editVar') {
         setEditVarImage(compressed);
+        if (currentVariant && onUpdateProduct) {
+          const updatedVariants = variants.map((v) =>
+            v.id === currentVariant.id ? { ...v, imageUrl: compressed } : v
+          );
+          onUpdateProduct({
+            ...product,
+            variants: updatedVariants,
+          });
+        }
       } else if (target === 'mainProduct') {
         if (onUpdateProduct) {
           onUpdateProduct({
@@ -224,10 +239,11 @@ export default function ProductDetailModal({
         }
       }
     } catch (err: any) {
-      console.error('Error compressing variant image:', err);
+      console.error('Error compressing image:', err);
       setImageError(err.message || 'Falha ao processar imagem.');
     } finally {
       setIsProcessingImage(false);
+      setPhotoSourceTarget(null);
       e.target.value = '';
     }
   };
@@ -387,12 +403,24 @@ export default function ProductDetailModal({
                         <img
                           src={editVarImage}
                           alt="Prévia da variação"
-                          className="w-8 h-8 rounded-lg object-cover shrink-0 border border-white/10"
+                          className="w-9 h-9 rounded-lg object-cover shrink-0 border border-white/10"
                         />
-                        <div className="flex-1 min-w-0">
-                          <label className="text-[10px] text-[#ffd56d] font-bold hover:underline flex items-center gap-1 cursor-pointer truncate">
-                            <FolderOpen className="w-3 h-3 shrink-0" />
-                            <span className="truncate">Trocar Foto</span>
+                        <div className="flex-1 min-w-0 flex items-center gap-2">
+                          <label className="text-[10px] text-[#ffd56d] font-bold hover:underline flex items-center gap-1 cursor-pointer">
+                            <Camera className="w-3 h-3 text-[#ffd56d] shrink-0" />
+                            <span>Câmera</span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              capture="environment"
+                              onChange={(e) => handleFileUpload(e, 'editVar')}
+                              className="hidden"
+                            />
+                          </label>
+                          <span className="text-gray-600">|</span>
+                          <label className="text-[10px] text-[#ffd56d] font-bold hover:underline flex items-center gap-1 cursor-pointer">
+                            <FolderOpen className="w-3 h-3 text-[#ffd56d] shrink-0" />
+                            <span>Galeria</span>
                             <input
                               type="file"
                               accept="image/*"
@@ -404,23 +432,36 @@ export default function ProductDetailModal({
                         <button
                           type="button"
                           onClick={() => setEditVarImage('')}
-                          className="text-[10px] text-red-400 hover:text-red-300 font-bold px-1"
+                          className="text-[10px] text-red-400 hover:text-red-300 font-bold px-1.5 py-1 rounded hover:bg-white/5 cursor-pointer"
                           title="Remover foto"
                         >
                           ✕
                         </button>
                       </div>
                     ) : (
-                      <label className="w-full py-2.5 px-3 bg-[#141416] border border-white/15 hover:border-[#ffd56d]/50 rounded-xl text-white text-[10px] font-bold transition flex items-center justify-center gap-1.5 cursor-pointer">
-                        <Camera className="w-3.5 h-3.5 text-[#ffd56d] shrink-0" />
-                        <span>{isProcessingImage ? 'Compactando...' : 'Carregar Foto da Galeria'}</span>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={(e) => handleFileUpload(e, 'editVar')}
-                          className="hidden"
-                        />
-                      </label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <label className="py-2.5 px-2 bg-[#141416] border border-white/15 hover:border-[#ffd56d]/50 rounded-xl text-white text-[10px] font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-sm group text-center">
+                          <Camera className="w-3.5 h-3.5 text-[#ffd56d] group-hover:scale-110 transition-transform shrink-0" />
+                          <span className="truncate">{isProcessingImage ? 'Compactando...' : 'Tirar Foto'}</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            capture="environment"
+                            onChange={(e) => handleFileUpload(e, 'editVar')}
+                            className="hidden"
+                          />
+                        </label>
+                        <label className="py-2.5 px-2 bg-[#141416] border border-white/15 hover:border-[#ffd56d]/50 rounded-xl text-white text-[10px] font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-sm group text-center">
+                          <FolderOpen className="w-3.5 h-3.5 text-[#ffd56d] group-hover:scale-110 transition-transform shrink-0" />
+                          <span className="truncate">{isProcessingImage ? 'Compactando...' : 'Da Galeria'}</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => handleFileUpload(e, 'editVar')}
+                            className="hidden"
+                          />
+                        </label>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -496,11 +537,20 @@ export default function ProductDetailModal({
                   <span className="text-[10px] font-bold">UN</span>
                 </div>
 
-                {/* Floating Top-Right: Camera icon - APENAS ESTÉTICO (sem clique independente) */}
-                <div className="absolute top-3 right-3 p-2 rounded-xl bg-black/75 backdrop-blur-md border border-white/20 text-[#ffd56d] shadow-lg flex items-center gap-1.5 text-xs font-bold pointer-events-none">
-                  <Camera className="w-3.5 h-3.5" />
+                {/* Floating Top-Right: Camera button - Opens Photo Source Picker (Câmera ou Galeria) */}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setPhotoSourceTarget(isBaseItem ? 'mainProduct' : 'editVar');
+                  }}
+                  className="absolute top-3 right-3 p-2 rounded-xl bg-black/80 hover:bg-[#ffd56d] text-[#ffd56d] hover:text-black backdrop-blur-md border border-[#ffd56d]/40 shadow-xl flex items-center gap-1.5 text-xs font-bold transition cursor-pointer z-10 active:scale-95 group/cam"
+                  title="Alterar Foto (Tirar foto ou Escolher da Galeria)"
+                  id="btn-hero-camera-action"
+                >
+                  <Camera className="w-3.5 h-3.5 group-hover/cam:scale-110 transition-transform" />
                   <span className="hidden sm:inline">Foto</span>
-                </div>
+                </button>
               </div>
 
               {/* Horizontal Thumbnail Strip */}
@@ -748,12 +798,24 @@ export default function ProductDetailModal({
                         <img
                           src={newVarImage}
                           alt="Prévia da nova variação"
-                          className="w-8 h-8 rounded-lg object-cover shrink-0 border border-white/10"
+                          className="w-9 h-9 rounded-lg object-cover shrink-0 border border-white/10"
                         />
-                        <div className="flex-1 min-w-0">
-                          <label className="text-[10px] text-[#ffd56d] font-bold hover:underline flex items-center gap-1 cursor-pointer truncate">
-                            <FolderOpen className="w-3 h-3 shrink-0" />
-                            <span className="truncate">Trocar Foto</span>
+                        <div className="flex-1 min-w-0 flex items-center gap-2">
+                          <label className="text-[10px] text-[#ffd56d] font-bold hover:underline flex items-center gap-1 cursor-pointer">
+                            <Camera className="w-3 h-3 text-[#ffd56d] shrink-0" />
+                            <span>Câmera</span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              capture="environment"
+                              onChange={(e) => handleFileUpload(e, 'newVar')}
+                              className="hidden"
+                            />
+                          </label>
+                          <span className="text-gray-600">|</span>
+                          <label className="text-[10px] text-[#ffd56d] font-bold hover:underline flex items-center gap-1 cursor-pointer">
+                            <FolderOpen className="w-3 h-3 text-[#ffd56d] shrink-0" />
+                            <span>Galeria</span>
                             <input
                               type="file"
                               accept="image/*"
@@ -765,23 +827,36 @@ export default function ProductDetailModal({
                         <button
                           type="button"
                           onClick={() => setNewVarImage('')}
-                          className="text-[10px] text-red-400 hover:text-red-300 font-bold px-1"
+                          className="text-[10px] text-red-400 hover:text-red-300 font-bold px-1.5 py-1 rounded hover:bg-white/5 cursor-pointer"
                           title="Remover foto"
                         >
                           ✕
                         </button>
                       </div>
                     ) : (
-                      <label className="w-full py-2.5 px-3 bg-[#141416] border border-white/10 hover:border-[#ffd56d]/50 rounded-xl text-white text-[10px] font-bold transition flex items-center justify-center gap-1.5 cursor-pointer">
-                        <Camera className="w-3.5 h-3.5 text-[#ffd56d] shrink-0" />
-                        <span>{isProcessingImage ? 'Compactando...' : 'Foto da Câmera / Galeria'}</span>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={(e) => handleFileUpload(e, 'newVar')}
-                          className="hidden"
-                        />
-                      </label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <label className="py-2.5 px-2 bg-[#141416] border border-white/10 hover:border-[#ffd56d]/50 rounded-xl text-white text-[10px] font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-sm group text-center">
+                          <Camera className="w-3.5 h-3.5 text-[#ffd56d] group-hover:scale-110 transition-transform shrink-0" />
+                          <span className="truncate">{isProcessingImage ? 'Compactando...' : 'Tirar Foto'}</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            capture="environment"
+                            onChange={(e) => handleFileUpload(e, 'newVar')}
+                            className="hidden"
+                          />
+                        </label>
+                        <label className="py-2.5 px-2 bg-[#141416] border border-white/10 hover:border-[#ffd56d]/50 rounded-xl text-white text-[10px] font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-sm group text-center">
+                          <FolderOpen className="w-3.5 h-3.5 text-[#ffd56d] group-hover:scale-110 transition-transform shrink-0" />
+                          <span className="truncate">{isProcessingImage ? 'Compactando...' : 'Da Galeria'}</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => handleFileUpload(e, 'newVar')}
+                            className="hidden"
+                          />
+                        </label>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -890,6 +965,138 @@ export default function ProductDetailModal({
           </div>
         </motion.div>
       </div>
+
+      {/* Hidden file inputs for Camera and Gallery triggered by the photo selector */}
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        onChange={(e) => {
+          if (photoSourceTarget) {
+            handleFileUpload(e, photoSourceTarget);
+          }
+        }}
+        className="hidden"
+        id="detail-camera-file-input"
+      />
+      <input
+        ref={galleryInputRef}
+        type="file"
+        accept="image/*"
+        onChange={(e) => {
+          if (photoSourceTarget) {
+            handleFileUpload(e, photoSourceTarget);
+          }
+        }}
+        className="hidden"
+        id="detail-gallery-file-input"
+      />
+
+      {/* Photo Source Selector Modal: Tirar Foto vs Escolher da Galeria */}
+      <AnimatePresence>
+        {photoSourceTarget && (
+          <div
+            className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-3 sm:p-4"
+            id="photo-source-modal-overlay"
+            onClick={() => setPhotoSourceTarget(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/85 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ opacity: 0, y: 40, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 40, scale: 0.95 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+              onClick={(e) => e.stopPropagation()}
+              className="relative z-10 w-full max-w-sm bg-[#161618] border border-[#ffd56d]/30 rounded-3xl p-5 shadow-2xl space-y-4"
+              id="photo-source-modal-window"
+            >
+              <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-[#ffd56d]/15 border border-[#ffd56d]/30 flex items-center justify-center text-[#ffd56d] shrink-0">
+                    <Camera className="w-5 h-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <h4 className="font-serif font-bold text-sm text-white">Alterar Foto</h4>
+                    <p className="text-[10px] text-[#8E8E93] truncate max-w-[200px]">
+                      {photoSourceTarget === 'mainProduct'
+                        ? product.name
+                        : currentVariant?.name || 'Variação'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPhotoSourceTarget(null)}
+                  className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition cursor-pointer"
+                  title="Fechar"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="space-y-2.5">
+                {/* Opção 1: Tirar uma Foto */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    cameraInputRef.current?.click();
+                  }}
+                  className="w-full p-3.5 rounded-2xl bg-[#202024] hover:bg-[#28282e] border border-white/10 hover:border-[#ffd56d]/50 text-white flex items-center gap-3 transition cursor-pointer group active:scale-98 shadow-sm"
+                  id="btn-photo-source-camera"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-[#ffd56d]/10 group-hover:bg-[#ffd56d] text-[#ffd56d] group-hover:text-black flex items-center justify-center transition shrink-0">
+                    <Camera className="w-5 h-5" />
+                  </div>
+                  <div className="text-left flex-1 min-w-0">
+                    <span className="block font-bold text-xs text-white group-hover:text-[#ffd56d] transition">
+                      Tirar uma Foto
+                    </span>
+                    <span className="block text-[10px] text-gray-400">
+                      Abrir câmera fotográfica do celular
+                    </span>
+                  </div>
+                </button>
+
+                {/* Opção 2: Escolher da Galeria */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    galleryInputRef.current?.click();
+                  }}
+                  className="w-full p-3.5 rounded-2xl bg-[#202024] hover:bg-[#28282e] border border-white/10 hover:border-[#ffd56d]/50 text-white flex items-center gap-3 transition cursor-pointer group active:scale-98 shadow-sm"
+                  id="btn-photo-source-gallery"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-[#ffd56d]/10 group-hover:bg-[#ffd56d] text-[#ffd56d] group-hover:text-black flex items-center justify-center transition shrink-0">
+                    <FolderOpen className="w-5 h-5" />
+                  </div>
+                  <div className="text-left flex-1 min-w-0">
+                    <span className="block font-bold text-xs text-white group-hover:text-[#ffd56d] transition">
+                      Escolher da Galeria
+                    </span>
+                    <span className="block text-[10px] text-gray-400">
+                      Selecionar foto salva nos arquivos
+                    </span>
+                  </div>
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setPhotoSourceTarget(null)}
+                className="w-full py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white text-xs font-bold transition cursor-pointer text-center"
+              >
+                Cancelar
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </AnimatePresence>
   );
 }
