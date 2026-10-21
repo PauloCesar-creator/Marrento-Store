@@ -31,7 +31,8 @@ import {
   Sliders,
   ChevronDown,
   ChevronUp,
-  RefreshCw
+  RefreshCw,
+  Coins
 } from 'lucide-react';
 import { Product, Transaction, MonthlyClosing } from '../types';
 
@@ -63,6 +64,8 @@ export default function ReportsView({
   const [feedbackMsg, setFeedbackMsg] = useState<{ type: 'success' | 'info'; text: string } | null>(null);
   const [showClosingConfig, setShowClosingConfig] = useState(false);
   const [deletingClosingId, setDeletingClosingId] = useState<string | null>(null);
+  const [isStockCatExpanded, setIsStockCatExpanded] = useState(true);
+  const [isInvestedCatExpanded, setIsInvestedCatExpanded] = useState(true);
 
   // Format Currency helper
   const formatCurrency = (val: number) => {
@@ -205,6 +208,34 @@ export default function ReportsView({
       };
     })
     .sort((a, b) => b.totalValue - a.totalValue);
+
+  // Category summary for invested cost value
+  const categoryInvestedMap = products.reduce((acc: Record<string, { totalInvested: number; totalQuantity: number }>, product) => {
+    const cat = product.category || 'Sem Categoria';
+    if (!acc[cat]) {
+      acc[cat] = { totalInvested: 0, totalQuantity: 0 };
+    }
+    const qty = product.variants && product.variants.length > 0
+      ? product.variants.reduce((sum, v) => sum + (Number(v.quantity) || 0), 0)
+      : (Number(product.quantity) || 0);
+    const unitCost = product.costPrice !== undefined && product.costPrice !== null && Number(product.costPrice) > 0
+      ? Number(product.costPrice)
+      : (Number(product.price) || 0);
+    acc[cat].totalInvested += unitCost * qty;
+    acc[cat].totalQuantity += qty;
+    return acc;
+  }, {});
+
+  const categoryInvestedSummaryList = Object.entries(categoryInvestedMap)
+    .map(([name, stats]) => {
+      const percentage = valorTotalInvestido > 0 ? (stats.totalInvested / valorTotalInvestido) * 100 : 0;
+      return {
+        name,
+        ...stats,
+        percentage,
+      };
+    })
+    .sort((a, b) => b.totalInvested - a.totalInvested);
 
   // Calculation of products sold in the selected period (Hoje, Semana, Mês)
   const productSalesMap = new Map<string, {
@@ -446,6 +477,9 @@ ${lowStockProducts.map((p) => `- ${p.name} (SKU: ${p.sku}): ${p.quantity} un em 
 RESUMO DO ESTOQUE ATUAL:
 - Valor Total em Estoque: ${formatCurrency(grandTotalValue)}
 - Quantidade Total de Peças: ${grandTotalQuantity} unidades
+- Valor Total Investido: ${formatCurrency(valorTotalInvestido)}
+- Investimento por Categoria:
+${categoryInvestedSummaryList.map(c => `  * ${c.name}: ${formatCurrency(c.totalInvested)} (${c.totalQuantity} un - ${c.percentage.toFixed(1)}%)`).join('\n')}
 
 FECHAMENTOS MENSAIS ARQUIVADOS (${monthlyClosings.length}):
 ${monthlyClosings.map((c) => `- ${c.periodRef} | Faturamento: ${formatCurrency(c.totalRevenue)} | Vendas: ${c.totalQuantitySold} un | Encerrado em: ${c.closedAtFormatted}`).join('\n') || 'Nenhum fechamento arquivado.'}
@@ -863,56 +897,166 @@ Fim do Relatório - Marento Store Luxury Control
         </div>
       </div>
 
-      {/* Dynamic Inventory Values by Category */}
-      <div className="rounded-2xl bg-brand-secondary p-5 border border-brand-tertiary space-y-4" id="reports-category-stock-card">
-        <div className="flex items-center justify-between border-b border-brand-tertiary/40 pb-3" id="reports-cat-stock-header">
-          <div className="space-y-1">
-            <h3 className="font-serif font-semibold text-base text-brand-neutral tracking-tight flex items-center gap-2">
-              <Tag className="w-4 h-4 text-brand-primary" />
-              Valor do Estoque por Categoria
-            </h3>
-            <p className="text-[10px] text-gray-500 font-sans">
-              Capital investido e volume total estocado no momento
-            </p>
+      {/* Dynamic Values by Category (Valor do Estoque & Valor Total Investido) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4" id="reports-category-breakdowns-section">
+        {/* Card 1: Valor do Estoque por Categoria */}
+        <div className="rounded-2xl bg-brand-secondary p-5 border border-brand-tertiary space-y-4" id="reports-category-stock-card">
+          <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${isStockCatExpanded ? 'border-b border-brand-tertiary/40 pb-3' : ''}`} id="reports-cat-stock-header">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <h3 className="font-serif font-semibold text-base text-brand-neutral tracking-tight flex items-center gap-2">
+                  <Tag className="w-4 h-4 text-brand-primary" />
+                  <span>Valor do Estoque por Categoria</span>
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setIsStockCatExpanded((prev) => !prev)}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-brand-bg/80 border border-brand-tertiary/70 hover:border-brand-primary/50 text-gray-300 hover:text-brand-primary text-xs font-medium transition cursor-pointer"
+                  title={isStockCatExpanded ? 'Ocultar categorias' : 'Expandir categorias'}
+                  id="reports-btn-toggle-stock-cat"
+                >
+                  <span>{isStockCatExpanded ? 'Ocultar' : 'Expandir'}</span>
+                  {isStockCatExpanded ? (
+                    <ChevronUp className="w-3.5 h-3.5 text-brand-primary" />
+                  ) : (
+                    <ChevronDown className="w-3.5 h-3.5 text-brand-primary" />
+                  )}
+                </button>
+              </div>
+              <p className="text-[10px] text-gray-500 font-sans">
+                Valor total de venda e volume de peças estocadas por categoria
+              </p>
+            </div>
+            <div className="text-left sm:text-right shrink-0">
+              <span className="block text-[10px] uppercase font-bold text-gray-500 tracking-wider">
+                Total em Estoque
+              </span>
+              <span className="font-serif text-brand-primary font-bold text-lg" id="reports-cat-stock-grand-total">
+                {formatCurrency(grandTotalValue)}
+              </span>
+            </div>
           </div>
-          <div className="text-right">
-            <span className="block text-[10px] uppercase font-bold text-gray-500 tracking-wider">
-              Total Geral
-            </span>
-            <span className="font-serif text-brand-primary font-bold text-lg" id="reports-cat-stock-grand-total">
-              {formatCurrency(grandTotalValue)}
-            </span>
-          </div>
+
+          <AnimatePresence>
+            {isStockCatExpanded && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.2 }}
+                className="space-y-3.5 overflow-hidden"
+                id="reports-cat-stock-list"
+              >
+                {categorySummaryList.length === 0 ? (
+                  <p className="text-xs text-gray-500 text-center py-4">Nenhum produto cadastrado no estoque.</p>
+                ) : (
+                  categorySummaryList.map((cat, idx) => (
+                    <div key={`reports-cat-${cat.name || idx}-${idx}`} className="space-y-1.5" id={`reports-cat-stock-item-${idx}`}>
+                      <div className="flex justify-between items-center text-xs">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full bg-brand-primary" />
+                          <span className="font-medium text-brand-neutral">{cat.name}</span>
+                          <span className="text-[10px] text-gray-500">({cat.totalQuantity} un)</span>
+                        </div>
+                        <div className="text-right font-mono font-semibold text-brand-neutral">
+                          <span>{formatCurrency(cat.totalValue)}</span>
+                          <span className="text-[9px] text-gray-500 ml-1.5 font-sans font-normal">
+                            ({cat.percentage.toFixed(1)}%)
+                          </span>
+                        </div>
+                      </div>
+                      <div className="w-full bg-brand-tertiary/40 h-2 rounded-full overflow-hidden">
+                        <div
+                          className="bg-brand-primary h-full rounded-full transition-all duration-500"
+                          style={{ width: `${Math.max(cat.percentage, 2)}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
-        <div className="space-y-3.5" id="reports-cat-stock-list">
-          {categorySummaryList.length === 0 ? (
-            <p className="text-xs text-gray-500 text-center py-4">Nenhum produto cadastrado no estoque.</p>
-          ) : (
-            categorySummaryList.map((cat, idx) => (
-              <div key={`reports-cat-${cat.name || idx}-${idx}`} className="space-y-1.5" id={`reports-cat-stock-item-${idx}`}>
-                <div className="flex justify-between items-center text-xs">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-brand-primary" />
-                    <span className="font-medium text-brand-neutral">{cat.name}</span>
-                    <span className="text-[10px] text-gray-500">({cat.totalQuantity} un)</span>
-                  </div>
-                  <div className="text-right font-mono font-semibold text-brand-neutral">
-                    <span>{formatCurrency(cat.totalValue)}</span>
-                    <span className="text-[9px] text-gray-500 ml-1.5 font-sans font-normal">
-                      ({cat.percentage.toFixed(1)}%)
-                    </span>
-                  </div>
-                </div>
-                <div className="w-full bg-brand-tertiary/40 h-2 rounded-full overflow-hidden">
-                  <div
-                    className="bg-brand-primary h-full rounded-full transition-all duration-500"
-                    style={{ width: `${Math.max(cat.percentage, 2)}%` }}
-                  />
-                </div>
+        {/* Card 2: Valor Total Investido por Categoria */}
+        <div className="rounded-2xl bg-brand-secondary p-5 border border-brand-tertiary space-y-4" id="reports-category-invested-card">
+          <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${isInvestedCatExpanded ? 'border-b border-brand-tertiary/40 pb-3' : ''}`} id="reports-cat-invested-header">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <h3 className="font-serif font-semibold text-base text-brand-neutral tracking-tight flex items-center gap-2">
+                  <Coins className="w-4 h-4 text-amber-400" />
+                  <span>Valor Total Investido por Categoria</span>
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setIsInvestedCatExpanded((prev) => !prev)}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-brand-bg/80 border border-brand-tertiary/70 hover:border-amber-400/50 text-gray-300 hover:text-amber-300 text-xs font-medium transition cursor-pointer"
+                  title={isInvestedCatExpanded ? 'Ocultar categorias' : 'Expandir categorias'}
+                  id="reports-btn-toggle-invested-cat"
+                >
+                  <span>{isInvestedCatExpanded ? 'Ocultar' : 'Expandir'}</span>
+                  {isInvestedCatExpanded ? (
+                    <ChevronUp className="w-3.5 h-3.5 text-amber-400" />
+                  ) : (
+                    <ChevronDown className="w-3.5 h-3.5 text-amber-400" />
+                  )}
+                </button>
               </div>
-            ))
-          )}
+              <p className="text-[10px] text-gray-500 font-sans">
+                Custo de aquisição investido no acervo atual por categoria
+              </p>
+            </div>
+            <div className="text-left sm:text-right shrink-0">
+              <span className="block text-[10px] uppercase font-bold text-amber-400/80 tracking-wider">
+                Total Investido
+              </span>
+              <span className="font-serif text-amber-300 font-bold text-lg" id="reports-cat-invested-grand-total">
+                {formatCurrency(valorTotalInvestido)}
+              </span>
+            </div>
+          </div>
+
+          <AnimatePresence>
+            {isInvestedCatExpanded && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.2 }}
+                className="space-y-3.5 overflow-hidden"
+                id="reports-cat-invested-list"
+              >
+                {categoryInvestedSummaryList.length === 0 ? (
+                  <p className="text-xs text-gray-500 text-center py-4">Nenhum produto cadastrado no estoque.</p>
+                ) : (
+                  categoryInvestedSummaryList.map((cat, idx) => (
+                    <div key={`reports-cat-inv-${cat.name || idx}-${idx}`} className="space-y-1.5" id={`reports-cat-invested-item-${idx}`}>
+                      <div className="flex justify-between items-center text-xs">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full bg-amber-400" />
+                          <span className="font-medium text-brand-neutral">{cat.name}</span>
+                          <span className="text-[10px] text-gray-500">({cat.totalQuantity} un)</span>
+                        </div>
+                        <div className="text-right font-mono font-semibold text-brand-neutral">
+                          <span className="text-amber-300">{formatCurrency(cat.totalInvested)}</span>
+                          <span className="text-[9px] text-gray-500 ml-1.5 font-sans font-normal">
+                            ({cat.percentage.toFixed(1)}%)
+                          </span>
+                        </div>
+                      </div>
+                      <div className="w-full bg-brand-tertiary/40 h-2 rounded-full overflow-hidden">
+                        <div
+                          className="bg-amber-400 h-full rounded-full transition-all duration-500"
+                          style={{ width: `${Math.max(cat.percentage, 2)}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
 

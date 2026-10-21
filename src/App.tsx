@@ -687,24 +687,9 @@ export default function App() {
 
   // Clean slate: no hardcoded sample data injection, client creates all categories, suppliers and products
 
-  // 4. Automatic low-stock checking and real-time notification generator
+  // 4. Notifications state handler (estoque mínimo removido conforme solicitado)
   useEffect(() => {
-    const lowStockAlerts: Notification[] = [];
-    products.forEach((prod) => {
-      if (prod.quantity <= prod.minStock) {
-        lowStockAlerts.push({
-          id: `notif-low-${prod.id}`,
-          productId: prod.id,
-          productName: prod.name,
-          sku: prod.sku,
-          type: 'low_stock',
-          message: `O item "${prod.name}" está abaixo do estoque mínimo de reposição (${prod.quantity}/${prod.minStock} unidades)!`,
-          timestamp: Date.now() - 1000 * 60 * 5, // 5 mins ago
-          read: false,
-        });
-      }
-    });
-    setNotifications(lowStockAlerts);
+    // Sem disparos de notificações de estoque mínimo
   }, [products]);
 
   // Mark specific notification as read

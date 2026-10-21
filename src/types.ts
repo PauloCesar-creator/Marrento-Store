@@ -24,7 +24,7 @@ export interface Product {
   price: number; // Unit selling value
   costPrice?: number; // Valor gasto / Custo de aquisição
   quantity: number; // Total quantity (sum of variants if variants exist)
-  minStock: number; // Minimum stock threshold
+  minStock?: number; // Minimum stock threshold (optional)
   imageUrl: string;
   supplier: string;
   description: string;

@@ -74,13 +74,8 @@ export default function DashboardView({
     return acc + unitCost * qty;
   }, 0);
 
-  // Count items below minimum stock
-  const lowStockCount = products.filter((p) => {
-    const qty = p.variants && p.variants.length > 0
-      ? p.variants.reduce((sum, v) => sum + (Number(v.quantity) || 0), 0)
-      : (Number(p.quantity) || 0);
-    return qty <= p.minStock;
-  }).length;
+  // Total models registered in catalog
+  const totalModelsCount = products.length;
 
   // Dynamic category styling helper
   const getCategoryMeta = (catName: string) => {
@@ -237,28 +232,28 @@ export default function DashboardView({
           </span>
         </motion.div>
 
-        {/* Low Stock Card */}
+        {/* Total Models Card */}
         <motion.div
           initial={{ opacity: 0, x: 15 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.3, delay: 0.1 }}
           onClick={() => onNavigateToTab('Estoque')}
-          className="group rounded-2xl bg-brand-secondary p-4 border border-brand-tertiary/50 hover:border-brand-red/30 cursor-pointer transition-all duration-200"
-          id="dash-lowstock-card"
+          className="group rounded-2xl bg-brand-secondary p-4 border border-brand-tertiary/50 hover:border-brand-primary/40 cursor-pointer transition-all duration-200"
+          id="dash-total-models-card"
         >
-          <div className="flex items-center gap-2 mb-2" id="dash-lowstock-header">
-            <div className="p-2 rounded-lg bg-brand-red/10 text-brand-red border border-brand-red/10 group-hover:scale-105 transition" id="dash-lowstock-icon-box">
-              <AlertTriangle className="w-4 h-4" />
+          <div className="flex items-center gap-2 mb-2" id="dash-total-models-header">
+            <div className="p-2 rounded-lg bg-brand-primary/10 text-brand-primary border border-brand-primary/10 group-hover:scale-105 transition" id="dash-total-models-icon-box">
+              <Layers className="w-4 h-4" />
             </div>
-            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider" id="dash-lowstock-lbl">
-              BAIXO ESTOQUE
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider" id="dash-total-models-lbl">
+              TOTAL DE MODELOS
             </span>
           </div>
-          <span className="block font-serif text-xl sm:text-2xl text-brand-neutral font-medium" id="dash-lowstock-val">
-            {lowStockCount} {lowStockCount === 1 ? 'Item' : 'Itens'}
+          <span className="block font-serif text-xl sm:text-2xl text-brand-neutral font-medium" id="dash-total-models-val">
+            {totalModelsCount} {totalModelsCount === 1 ? 'Modelo' : 'Modelos'}
           </span>
-          <span className="text-[10px] text-brand-red font-medium mt-1 inline-flex items-center gap-1" id="dash-lowstock-alert-msg">
-            {lowStockCount > 0 ? 'Reposição imediata' : 'Nenhuma pendência'}
+          <span className="text-[10px] text-brand-primary font-medium mt-1 inline-flex items-center gap-1" id="dash-total-models-hint">
+            Acervo cadastrado <ChevronRight className="w-3 h-3" />
           </span>
         </motion.div>
       </div>

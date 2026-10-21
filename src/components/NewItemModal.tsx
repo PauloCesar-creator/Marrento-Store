@@ -436,34 +436,19 @@ export default function NewItemModal({
               </div>
             </div>
 
-            {/* Row: QTD INICIAL | ESTOQUE MÍN * */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <label className="block text-[10px] font-bold uppercase tracking-wider text-[#D4A017] font-sans">
-                  QTD INICIAL
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  value={quantity}
-                  onChange={(e) => setQuantity(parseInt(e.target.value) || 0)}
-                  className="w-full bg-[#141416] border border-white/10 rounded-xl px-3.5 py-3 text-xs font-mono font-bold text-white focus:outline-none focus:border-[#E5B842] text-center"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="block text-[10px] font-bold uppercase tracking-wider text-[#D4A017] font-sans">
-                  ESTOQUE MÍN *
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  required
-                  value={minStock}
-                  onChange={(e) => setMinStock(parseInt(e.target.value) || 0)}
-                  className="w-full bg-[#141416] border border-white/10 rounded-xl px-3.5 py-3 text-xs font-mono font-bold text-white focus:outline-none focus:border-[#E5B842] text-center"
-                />
-              </div>
+            {/* Field: QTD INICIAL */}
+            <div className="space-y-1">
+              <label className="block text-[10px] font-bold uppercase tracking-wider text-[#D4A017] font-sans">
+                QUANTIDADE EM ESTOQUE INICIAL
+              </label>
+              <input
+                type="number"
+                min="0"
+                value={quantity}
+                onChange={(e) => setQuantity(parseInt(e.target.value) || 0)}
+                placeholder="0"
+                className="w-full bg-[#141416] border border-white/10 rounded-xl px-3.5 py-3 text-xs font-mono font-bold text-white focus:outline-none focus:border-[#E5B842] text-center"
+              />
             </div>
 
             {/* Field: FOTO DO PRODUTO (CÂMERA OU GALERIA) */}

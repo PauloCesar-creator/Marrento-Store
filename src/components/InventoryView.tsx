@@ -116,34 +116,47 @@ export default function InventoryView({
     localStorage.setItem('marento_grid_cols', cols.toString());
   };
 
+  const [variantPickerProduct, setVariantPickerProduct] = useState<Product | null>(null);
+
+  const triggerCartAdd = (btnEl: HTMLElement | null, prod: Product, variant?: ProductVariant) => {
+    if (btnEl) {
+      const btnRect = btnEl.getBoundingClientRect();
+      const fabEl = document.getElementById('global-sales-fab');
+      const fabRect = fabEl ? fabEl.getBoundingClientRect() : null;
+
+      const startX = btnRect.left + btnRect.width / 2;
+      const startY = btnRect.top + btnRect.height / 2;
+      const endX = fabRect ? fabRect.left + fabRect.width / 2 : window.innerWidth - 40;
+      const endY = fabRect ? fabRect.top + fabRect.height / 2 : window.innerHeight - 90;
+
+      const newDot: FlyingDot = {
+        id: Date.now() + Math.random(),
+        startX,
+        startY,
+        endX,
+        endY,
+      };
+
+      setFlyingDots((prev) => [...prev, newDot]);
+    }
+
+    if (onAddToCart) {
+      onAddToCart(prod, variant);
+    }
+  };
+
   const handleVenderClick = (e: React.MouseEvent, prod: Product) => {
     e.stopPropagation();
 
-    // 1. Calculate trajectory from clicked button to floating sales FAB ($ button)
-    const btnEl = e.currentTarget as HTMLElement;
-    const btnRect = btnEl.getBoundingClientRect();
-    const fabEl = document.getElementById('global-sales-fab');
-    const fabRect = fabEl ? fabEl.getBoundingClientRect() : null;
-
-    const startX = btnRect.left + btnRect.width / 2;
-    const startY = btnRect.top + btnRect.height / 2;
-    const endX = fabRect ? fabRect.left + fabRect.width / 2 : window.innerWidth - 40;
-    const endY = fabRect ? fabRect.top + fabRect.height / 2 : window.innerHeight - 90;
-
-    const newDot: FlyingDot = {
-      id: Date.now() + Math.random(),
-      startX,
-      startY,
-      endX,
-      endY,
-    };
-
-    setFlyingDots((prev) => [...prev, newDot]);
-
-    // 2. Add item to cart (does not open sales panel, just adds and jumps red dot)
-    if (onAddToCart) {
-      onAddToCart(prod);
+    // Se o produto tiver variações, abre lista ágil para o usuário selecionar a variação desejada
+    if (prod.variants && prod.variants.length > 0) {
+      setVariantPickerProduct(prod);
+      return;
     }
+
+    // Caso não tenha variações, adiciona direto ao carrinho com animação de ponto vermelho
+    const btnEl = e.currentTarget as HTMLElement;
+    triggerCartAdd(btnEl, prod);
   };
   const [editingProd, setEditingProd] = useState<Product | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -304,12 +317,12 @@ export default function InventoryView({
     new Set(['Todos', ...categories])
   );
 
-  // Helper to get relative category icon background
+  // Helper to get stock badge styling
   const getStockBadgeStyle = (prod: Product) => {
-    if (prod.quantity <= prod.minStock) {
-      return 'bg-brand-red/10 border-brand-red text-brand-red font-bold';
+    if (prod.quantity === 0) {
+      return 'bg-red-500/20 border-red-500/30 text-red-400 font-bold';
     }
-    return 'bg-brand-secondary/90 border-brand-tertiary text-brand-primary';
+    return 'bg-black/80 border-white/10 text-[#ffd56d] font-bold';
   };
 
   return (
@@ -695,7 +708,7 @@ export default function InventoryView({
                       prod
                     )}`}
                   >
-                    {prod.quantity <= (prod.minStock || 0) ? 'Pouco Estoque' : `${prod.quantity} un`}
+                    {prod.quantity} un
                   </span>
                 </div>
 
@@ -1248,6 +1261,132 @@ export default function InventoryView({
           onAddToCart={onAddToCart}
         />
       )}
+
+      {/* Quick Variation Selector Modal: Seleção rápida e minimalista ao clicar em Vender */}
+      <AnimatePresence>
+        {variantPickerProduct && (
+          <div
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-3 sm:p-4"
+            id="quick-variant-picker-overlay"
+            onClick={() => setVariantPickerProduct(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/85 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ opacity: 0, y: 30, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 30, scale: 0.96 }}
+              transition={{ type: 'spring', damping: 26, stiffness: 360 }}
+              onClick={(e) => e.stopPropagation()}
+              className="relative z-10 w-full max-w-sm bg-[#141416] border border-[#ffd56d]/30 rounded-3xl p-4 sm:p-5 shadow-2xl space-y-3 max-h-[85vh] flex flex-col my-auto"
+              id="quick-variant-picker-window"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                <div className="min-w-0 pr-2">
+                  <span className="block text-[10px] font-bold uppercase tracking-widest text-[#D4A017] font-sans">
+                    SELECIONE A VARIAÇÃO
+                  </span>
+                  <h3 className="font-serif font-bold text-sm text-white truncate pt-0.5">
+                    {variantPickerProduct.name}
+                  </h3>
+                  <span className="text-[11px] font-serif font-bold text-[#ffd56d]">
+                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(variantPickerProduct.price)}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setVariantPickerProduct(null)}
+                  className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/15 flex items-center justify-center text-gray-400 hover:text-white transition cursor-pointer shrink-0"
+                  title="Fechar"
+                  id="btn-quick-variant-close"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Variations Quick List - Poucos detalhes para seleção rápida */}
+              <div className="space-y-2 overflow-y-auto flex-1 pr-1 scrollbar-thin" id="quick-variant-list">
+                {variantPickerProduct.variants?.map((v) => {
+                  const isOutOfStock = v.quantity <= 0;
+                  return (
+                    <button
+                      key={`quick-var-${v.id}`}
+                      type="button"
+                      disabled={isOutOfStock}
+                      onClick={(e) => {
+                        const targetEl = e.currentTarget;
+                        triggerCartAdd(targetEl, variantPickerProduct, v);
+                        setVariantPickerProduct(null);
+                      }}
+                      className={`w-full flex items-center justify-between p-2.5 rounded-2xl border transition text-left ${
+                        isOutOfStock
+                          ? 'bg-[#1C1C1E]/50 border-white/5 opacity-50 cursor-not-allowed'
+                          : 'bg-[#1C1C1E] hover:bg-[#24242A] border-white/10 hover:border-[#ffd56d]/60 cursor-pointer active:scale-98 shadow-sm group'
+                      }`}
+                      id={`btn-quick-var-item-${v.id}`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0 flex-1 pr-2">
+                        <div className="w-10 h-10 rounded-xl overflow-hidden bg-black shrink-0 border border-white/10">
+                          <img
+                            src={v.imageUrl || variantPickerProduct.imageUrl || LUXURY_IMAGE_FALLBACK}
+                            alt={v.name}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              (e.currentTarget as HTMLImageElement).src = LUXURY_IMAGE_FALLBACK;
+                            }}
+                          />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-bold text-white group-hover:text-[#ffd56d] transition truncate">
+                            {v.name}
+                          </p>
+                          <p className="text-[10px] text-gray-400 font-mono mt-0.5">
+                            {v.quantity > 0 ? (
+                              <span className="text-emerald-400 font-bold">{v.quantity} un disponível</span>
+                            ) : (
+                              <span className="text-red-400 font-bold">Sem estoque</span>
+                            )}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="shrink-0">
+                        {isOutOfStock ? (
+                          <span className="px-2.5 py-1 rounded-lg bg-white/5 text-gray-500 font-bold text-[10px]">
+                            Esgotado
+                          </span>
+                        ) : (
+                          <span className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-[#D4A017] to-[#ffd56d] text-black font-sans font-black text-xs uppercase tracking-wider shadow flex items-center gap-1 group-hover:brightness-105 transition">
+                            <Tag className="w-3 h-3 stroke-[2.8]" />
+                            <span>Vender</span>
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Cancel Button */}
+              <div className="pt-2 border-t border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setVariantPickerProduct(null)}
+                  className="w-full py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white text-xs font-bold transition cursor-pointer text-center"
+                  id="btn-quick-variant-cancel"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Flying Red Dots Animation: leaping from product card straight into floating $ cart */}
       <AnimatePresence>

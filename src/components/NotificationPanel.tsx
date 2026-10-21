@@ -73,7 +73,7 @@ export default function NotificationPanel({
                   <div className="flex flex-col items-center justify-center py-8 text-center text-gray-500" id="notif-empty-state">
                     <Sparkles className="w-8 h-8 text-brand-tertiary mb-2" id="notif-empty-sparkle" />
                     <p className="text-xs" id="notif-empty-text">Nenhuma notificação por enquanto</p>
-                    <p className="text-[10px] mt-0.5">O sistema avisará se houver itens abaixo do estoque mínimo.</p>
+                    <p className="text-[10px] mt-0.5">O sistema avisará sobre novas vendas e movimentações.</p>
                   </div>
                 ) : (
                   notifications.map((notif, idx) => (
