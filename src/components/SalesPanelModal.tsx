@@ -27,6 +27,7 @@ import {
 import { Product, ProductVariant, Transaction } from '../types';
 import { playScanBeep } from '../utils/barcodeUtils';
 import { generateUUID } from '../utils/uuid';
+import { useModalHistory } from '../utils/useModalHistory';
 
 export interface CartItem {
   id: string; // unique item id: `${productId}-${variantId || 'base'}`
@@ -45,6 +46,8 @@ interface SalesPanelModalProps {
   products: Product[];
   initialProductId?: string;
   initialVariantId?: string;
+  initialCartItems?: CartItem[];
+  onUpdateCart?: (items: CartItem[]) => void;
   onConfirmSale: (
     productId: string,
     quantity: number,
@@ -67,12 +70,17 @@ export default function SalesPanelModal({
   products,
   initialProductId,
   initialVariantId,
+  initialCartItems,
+  onUpdateCart,
   onConfirmSale,
   onOpenPrintReceipt,
   onOpenNfce,
 }: SalesPanelModalProps) {
+  // Native back button integration
+  useModalHistory(isOpen, onClose, 'sales_panel');
+
   // Cart state: Multi-items
-  const [cart, setCart] = useState<CartItem[]>([]);
+  const [cart, setCart] = useState<CartItem[]>(() => initialCartItems || []);
 
   // Checkout states
   const [paymentMethod, setPaymentMethod] = useState<string>('PIX');
@@ -211,6 +219,13 @@ export default function SalesPanelModal({
     setCart([]);
   };
 
+  // Sync cart changes to external onUpdateCart handler
+  useEffect(() => {
+    if (onUpdateCart) {
+      onUpdateCart(cart);
+    }
+  }, [cart, onUpdateCart]);
+
   // Initialize or reset when modal opens
   useEffect(() => {
     if (isOpen) {
@@ -243,11 +258,11 @@ export default function SalesPanelModal({
             },
           ]);
         }
-      } else {
-        setCart([]);
+      } else if (initialCartItems && initialCartItems.length > 0) {
+        setCart(initialCartItems);
       }
     }
-  }, [isOpen, initialProductId, initialVariantId]);
+  }, [isOpen, initialProductId, initialVariantId, initialCartItems]);
 
   // Fast barcode / SKU / unique code scan lookup
   const handleProcessBipScan = (codeToSearch: string) => {

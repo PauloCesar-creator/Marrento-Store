@@ -9,10 +9,12 @@ import {
   Watch,
   Plus,
   AlertCircle,
-  Sparkles
+  Sparkles,
+  Camera
 } from 'lucide-react';
 import { Product, CategoryName } from '../types';
-import { compressImageFile } from '../lib/imageUtils';
+import { compressImageFile, LUXURY_IMAGE_FALLBACK } from '../lib/imageUtils';
+import { useModalHistory } from '../utils/useModalHistory';
 
 interface NewItemModalProps {
   isOpen: boolean;
@@ -37,6 +39,9 @@ export default function NewItemModal({
   editingProduct,
   onEditProduct,
 }: NewItemModalProps) {
+  // Native back button integration
+  useModalHistory(isOpen, onClose, 'new_item');
+
   const [name, setName] = useState('');
   const [sku, setSku] = useState('');
   const [category, setCategory] = useState<CategoryName>('');
@@ -119,12 +124,15 @@ export default function NewItemModal({
     if (file) {
       try {
         setIsProcessingImage(true);
-        const compressed = await compressImageFile(file, 800, 800, 0.82);
+        setError('');
+        const compressed = await compressImageFile(file, 640, 640, 0.78);
         setImageUrl(compressed);
       } catch (err: any) {
         console.error('Error compressing image:', err);
+        setError(err.message || 'Falha ao processar a foto selecionada.');
       } finally {
         setIsProcessingImage(false);
+        e.target.value = '';
       }
     }
   };
@@ -159,9 +167,7 @@ export default function NewItemModal({
 
     const finalPrice = price > 0 ? price : costPrice;
     const finalCost = costPrice > 0 ? costPrice : price;
-    const finalImg =
-      imageUrl.trim() ||
-      'https://images.unsplash.com/photo-1614162692292-7ac56d7f7f1e?auto=format&fit=crop&w=600&q=80';
+    const finalImg = imageUrl.trim() || '';
 
     if (editingProduct && onEditProduct) {
       onEditProduct({
@@ -243,12 +249,12 @@ export default function NewItemModal({
             <div className="bg-[#141416] border border-[#E5B842]/20 rounded-2xl p-3 flex items-center gap-3">
               <div className="w-11 h-11 rounded-xl overflow-hidden bg-black/60 border border-white/10 shrink-0">
                 <img
-                  src={
-                    imageUrl ||
-                    'https://images.unsplash.com/photo-1614162692292-7ac56d7f7f1e?auto=format&fit=crop&w=600&q=80'
-                  }
+                  src={imageUrl || LUXURY_IMAGE_FALLBACK}
                   alt="Preview"
                   className="w-full h-full object-cover"
+                  onError={(e) => {
+                    (e.currentTarget as HTMLImageElement).src = LUXURY_IMAGE_FALLBACK;
+                  }}
                 />
               </div>
               <div className="min-w-0 space-y-0.5">
@@ -460,13 +466,13 @@ export default function NewItemModal({
               </div>
             </div>
 
-            {/* Field: FOTO DO PRODUTO (GALERIA) */}
+            {/* Field: FOTO DO PRODUTO (CÂMERA OU GALERIA) */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between text-[10px]">
                 <label className="font-bold uppercase tracking-wider text-[#D4A017] font-sans">
                   FOTO DO PRODUTO
                 </label>
-                <span className="text-[#8E8E93] uppercase tracking-wider">GALERIA DO DISPOSITIVO</span>
+                <span className="text-[#8E8E93] uppercase tracking-wider">CÂMERA OU GALERIA</span>
               </div>
 
               {imageUrl ? (
@@ -476,14 +482,17 @@ export default function NewItemModal({
                       src={imageUrl}
                       alt="Foto do produto"
                       className="w-full h-full object-cover"
+                      onError={(e) => {
+                        (e.currentTarget as HTMLImageElement).src = LUXURY_IMAGE_FALLBACK;
+                      }}
                     />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold text-white truncate">Foto Carregada com Sucesso</p>
-                    <p className="text-[10px] text-emerald-400 font-mono">Otimizada para carregamento instantâneo</p>
+                    <p className="text-xs font-semibold text-white truncate">Foto Otimizada com Sucesso</p>
+                    <p className="text-[10px] text-emerald-400 font-mono">Pronta para sincronizar e salvar</p>
                     <div className="flex items-center gap-2 mt-1.5">
                       <label className="text-[10px] text-[#ffd56d] hover:underline flex items-center gap-1 cursor-pointer font-bold">
-                        <FolderOpen className="w-3.5 h-3.5" />
+                        <Camera className="w-3.5 h-3.5" />
                         <span>Trocar foto</span>
                         <input
                           type="file"
@@ -504,16 +513,29 @@ export default function NewItemModal({
                   </div>
                 </div>
               ) : (
-                <label className="w-full py-3.5 px-4 bg-[#141416] border border-white/10 hover:border-[#ffd56d]/50 rounded-xl text-white text-xs font-bold transition flex items-center justify-center gap-2.5 cursor-pointer shadow-sm group">
-                  <FolderOpen className="w-4 h-4 text-[#ffd56d] group-hover:scale-110 transition-transform" />
-                  <span>{isProcessingImage ? 'Otimizando foto...' : 'Selecionar Foto da Galeria'}</span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleFileUpload}
-                    className="hidden"
-                  />
-                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="py-3 px-3 bg-[#141416] border border-white/10 hover:border-[#ffd56d]/50 rounded-xl text-white text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer shadow-sm group text-center">
+                    <Camera className="w-4 h-4 text-[#ffd56d] group-hover:scale-110 transition-transform shrink-0" />
+                    <span className="truncate">{isProcessingImage ? 'Compactando...' : 'Tirar Foto'}</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      onChange={handleFileUpload}
+                      className="hidden"
+                    />
+                  </label>
+                  <label className="py-3 px-3 bg-[#141416] border border-white/10 hover:border-[#ffd56d]/50 rounded-xl text-white text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer shadow-sm group text-center">
+                    <FolderOpen className="w-4 h-4 text-[#ffd56d] group-hover:scale-110 transition-transform shrink-0" />
+                    <span className="truncate">{isProcessingImage ? 'Compactando...' : 'Abrir Galeria'}</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleFileUpload}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
               )}
             </div>
 

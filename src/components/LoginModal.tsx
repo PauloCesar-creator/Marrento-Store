@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { User, Lock, Eye, EyeOff, ShieldCheck, AlertCircle, LogIn } from 'lucide-react';
+import { useModalHistory } from '../utils/useModalHistory';
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -8,6 +9,8 @@ interface LoginModalProps {
 }
 
 export default function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginModalProps) {
+  useModalHistory(isOpen, onClose, 'login_modal');
+
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);

@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { X, Printer, FileText, CheckCircle, Receipt, QrCode, Barcode, ShieldCheck } from 'lucide-react';
 import { Transaction, Product } from '../types';
 import BarcodeDisplay from './BarcodeDisplay';
+import { useModalHistory } from '../utils/useModalHistory';
 
 interface PrintReceiptModalProps {
   isOpen: boolean;
@@ -17,6 +18,8 @@ export default function PrintReceiptModal({
   transaction,
   product,
 }: PrintReceiptModalProps) {
+  useModalHistory(isOpen, onClose, 'print_receipt');
+
   const [docType, setDocType] = useState<'nfce' | 'comprovante'>('nfce');
   const [paperWidth, setPaperWidth] = useState<'58mm' | '80mm' | 'a4'>('58mm');
   const [cpfConsumidor, setCpfConsumidor] = useState<string>('Consumidor Não Identificado');

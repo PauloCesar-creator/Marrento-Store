@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { Product, ProductVariant, Transaction } from '../types';
 import BarcodeDisplay from './BarcodeDisplay';
+import { useModalHistory } from '../utils/useModalHistory';
 
 interface NfceModalProps {
   isOpen: boolean;
@@ -41,6 +42,7 @@ export default function NfceModal({
   initialVariant,
   onConfirmSaleAndPrint,
 }: NfceModalProps) {
+  useModalHistory(isOpen, onClose, 'nfce_modal');
   // 1. Product Selection States
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);

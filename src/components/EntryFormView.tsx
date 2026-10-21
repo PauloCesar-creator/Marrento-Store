@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Camera, Check, Upload, ArrowUpRight, Shield, AlertCircle, Sparkles } from 'lucide-react';
 import { Product, CategoryName, Transaction } from '../types';
+import { compressImageFile, LUXURY_IMAGE_FALLBACK } from '../lib/imageUtils';
 
 interface EntryFormViewProps {
   products: Product[];
@@ -43,17 +44,20 @@ export default function EntryFormView({
   const [isTypingNewSup, setIsTypingNewSup] = useState(false);
   const [newCustomSupplierName, setNewCustomSupplierName] = useState('');
 
-  // Handle local file uploads (converts file to Base64)
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Handle local file uploads with optimization
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        if (typeof reader.result === 'string') {
-          setImageUrl(reader.result);
-        }
-      };
-      reader.readAsDataURL(file);
+      try {
+        setError('');
+        const compressed = await compressImageFile(file, 640, 640, 0.78);
+        setImageUrl(compressed);
+      } catch (err: any) {
+        console.error('Error compressing image:', err);
+        setError(err.message || 'Falha ao processar a foto.');
+      } finally {
+        e.target.value = '';
+      }
     }
   };
 

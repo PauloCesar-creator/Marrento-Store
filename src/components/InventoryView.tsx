@@ -1,9 +1,40 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Plus, Minus, Trash2, Edit, AlertCircle, ShoppingBag, SlidersHorizontal, Tag, X, Check, Truck, Sparkles, Layers, Barcode, Printer, Zap } from 'lucide-react';
+import {
+  Search,
+  Plus,
+  Minus,
+  Trash2,
+  Edit,
+  AlertCircle,
+  ShoppingBag,
+  SlidersHorizontal,
+  Tag,
+  X,
+  Check,
+  Truck,
+  Sparkles,
+  Layers,
+  Barcode,
+  Printer,
+  Zap,
+  QrCode,
+  Columns2,
+  Columns3,
+  LayoutGrid
+} from 'lucide-react';
 import { Product, CategoryName } from '../types';
 import ProductDetailModal from './ProductDetailModal';
 import NewItemModal from './NewItemModal';
+import { LUXURY_IMAGE_FALLBACK } from '../lib/imageUtils';
+
+interface FlyingDot {
+  id: number;
+  startX: number;
+  startY: number;
+  endX: number;
+  endY: number;
+}
 
 interface InventoryViewProps {
   products: Product[];
@@ -32,6 +63,9 @@ interface InventoryViewProps {
   onOpenPrintTag?: (product: Product, variant?: any) => void;
   autoDeleteCategories?: string[];
   onToggleCategoryAutoDelete?: (categoryName: string) => void;
+  onAddToCart?: (product: Product, variant?: any) => void;
+  cartCount?: number;
+  onOpenSalesPanel?: () => void;
 }
 
 export default function InventoryView({
@@ -54,9 +88,52 @@ export default function InventoryView({
   onOpenPrintTag,
   autoDeleteCategories = [],
   onToggleCategoryAutoDelete,
+  onAddToCart,
+  cartCount = 0,
+  onOpenSalesPanel,
 }: InventoryViewProps) {
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [isAddOpen, setIsAddOpen] = useState<boolean>(false);
+  const [gridCols, setGridCols] = useState<2 | 3>(() => {
+    const saved = localStorage.getItem('marento_grid_cols');
+    return saved === '3' ? 3 : 2;
+  });
+  const [flyingDots, setFlyingDots] = useState<FlyingDot[]>([]);
+
+  const handleSetGridCols = (cols: 2 | 3) => {
+    setGridCols(cols);
+    localStorage.setItem('marento_grid_cols', cols.toString());
+  };
+
+  const handleVenderClick = (e: React.MouseEvent, prod: Product) => {
+    e.stopPropagation();
+
+    // 1. Calculate trajectory from clicked button to floating sales FAB ($ button)
+    const btnEl = e.currentTarget as HTMLElement;
+    const btnRect = btnEl.getBoundingClientRect();
+    const fabEl = document.getElementById('global-sales-fab');
+    const fabRect = fabEl ? fabEl.getBoundingClientRect() : null;
+
+    const startX = btnRect.left + btnRect.width / 2;
+    const startY = btnRect.top + btnRect.height / 2;
+    const endX = fabRect ? fabRect.left + fabRect.width / 2 : window.innerWidth - 40;
+    const endY = fabRect ? fabRect.top + fabRect.height / 2 : window.innerHeight - 90;
+
+    const newDot: FlyingDot = {
+      id: Date.now() + Math.random(),
+      startX,
+      startY,
+      endX,
+      endY,
+    };
+
+    setFlyingDots((prev) => [...prev, newDot]);
+
+    // 2. Add item to cart (does not open sales panel, just adds and jumps red dot)
+    if (onAddToCart) {
+      onAddToCart(prod);
+    }
+  };
   const [editingProd, setEditingProd] = useState<Product | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isTypingNewCat, setIsTypingNewCat] = useState(false);
@@ -339,12 +416,12 @@ export default function InventoryView({
           {onOpenBarcodeScanner && (
             <button
               onClick={onOpenBarcodeScanner}
-              className="flex items-center gap-1.5 px-4 py-3 rounded-xl bg-brand-secondary hover:bg-brand-tertiary border border-brand-primary/60 text-brand-primary font-bold text-xs transition shadow-md cursor-pointer shrink-0"
+              className="flex items-center gap-1.5 px-3.5 sm:px-4 py-3 rounded-xl bg-[#1C1C1E] hover:bg-[#2A2A2C] border border-[#ffd56d]/60 text-[#ffd56d] font-bold text-xs transition shadow-md cursor-pointer shrink-0 active:scale-95"
               id="inv-btn-bipar-search"
-              title="Abrir Leitor de Código de Barras Plug & Play"
+              title="Abrir Câmera para Escanear QR Code e Código de Barras"
             >
-              <Barcode className="w-4 h-4 text-brand-primary" />
-              <span className="hidden sm:inline">Bipar</span>
+              <QrCode className="w-4 h-4 text-[#ffd56d]" />
+              <span className="hidden sm:inline">Escanear QR Code</span>
             </button>
           )}
         </div>
@@ -421,174 +498,278 @@ export default function InventoryView({
             </button>
           )}
         </div>
+
+        {/* View Mode Switcher Sub-Bar (2 Colunas vs 3 Colunas) */}
+        <div className="flex items-center justify-between pt-1 text-xs" id="inv-grid-switcher-bar">
+          <div className="text-[#8E8E93] text-xs font-sans">
+            <span className="font-bold text-white">{filteredProducts.length}</span>{' '}
+            {filteredProducts.length === 1 ? 'peça encontrada' : 'peças encontradas'}
+          </div>
+
+          <div className="flex items-center gap-1 bg-[#1C1C1E] p-1 rounded-xl border border-white/10 shadow-inner">
+            <button
+              type="button"
+              onClick={() => handleSetGridCols(2)}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                gridCols === 2
+                  ? 'bg-gradient-to-r from-[#D4A017] to-[#ffd56d] text-black shadow-md'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+              id="inv-switch-cols-2"
+              title="Exibir catálogo em 2 Colunas (Aura Luxury)"
+            >
+              <Columns2 className="w-3.5 h-3.5" />
+              <span>2 Colunas</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleSetGridCols(3)}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                gridCols === 3
+                  ? 'bg-gradient-to-r from-[#D4A017] to-[#ffd56d] text-black shadow-md'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+              id="inv-switch-cols-3"
+              title="Exibir catálogo em 3 Colunas (Grid Compacto)"
+            >
+              <Columns3 className="w-3.5 h-3.5" />
+              <span>3 Colunas</span>
+            </button>
+          </div>
+        </div>
       </div>
 
-      {/* 3. Product Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4" id="inv-grid">
-        {filteredProducts.map((prod, idx) => (
-          <motion.div
-            key={`inv-prod-${prod.id}-${idx}`}
-            layout
-            className="relative flex flex-col rounded-2xl border border-brand-tertiary bg-brand-secondary shadow-lg overflow-hidden group"
-            id={`inv-card-${prod.id}`}
-          >
-            {/* Top Image area with Stock Badges */}
-            <div
-              className="relative h-44 w-full overflow-hidden bg-brand-bg/40 cursor-pointer"
-              onClick={() => setDetailProd(prod)}
-              id={`inv-img-area-${prod.id}`}
-            >
-              <img
-                src={prod.imageUrl}
-                alt={prod.name}
-                referrerPolicy="no-referrer"
-                className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
-                id={`inv-img-${prod.id}`}
-              />
-              
-              {/* Overlay Gradient for contrast */}
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+      {/* 3. Product Cards Grid (Coluna 2 ou Coluna 3) */}
+      <div
+        className={
+          gridCols === 2
+            ? 'grid grid-cols-2 gap-3 sm:gap-4.5'
+            : 'grid grid-cols-3 gap-2 sm:gap-3'
+        }
+        id="inv-grid"
+      >
+        {filteredProducts.map((prod, idx) => {
+          if (gridCols === 3) {
+            /* ============================================================
+               COLUNA 3 COMPACT LUXURY CARD (coluna3 specification)
+               ============================================================ */
+            return (
+              <motion.div
+                key={`inv-prod-3col-${prod.id}-${idx}`}
+                layout
+                onClick={() => setDetailProd(prod)}
+                className="relative flex flex-col rounded-xl sm:rounded-2xl border border-white/10 bg-[#1C1C1E] shadow-lg overflow-hidden group hover:border-[#ffd56d]/50 transition duration-200 cursor-pointer"
+                id={`inv-card-${prod.id}`}
+              >
+                {/* Image Area with Top Badges */}
+                <div className="relative h-28 sm:h-36 w-full overflow-hidden bg-black/60">
+                  <img
+                    src={prod.imageUrl || LUXURY_IMAGE_FALLBACK}
+                    alt={prod.name}
+                    referrerPolicy="no-referrer"
+                    className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).src = LUXURY_IMAGE_FALLBACK;
+                    }}
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#1C1C1E] via-transparent to-black/40 pointer-events-none" />
 
-              {/* Variations Count Badge if variations exist */}
-              {prod.variants && prod.variants.length > 0 && (
-                <div className="absolute top-3 left-3" id={`inv-variants-badge-${prod.id}`}>
-                  <span className="px-2.5 py-1 rounded-lg text-[9px] uppercase tracking-wider font-bold bg-[#ffd56d] text-black border border-[#ffd56d] shadow-md flex items-center gap-1">
-                    <Sparkles className="w-3 h-3 stroke-[2.5]" />
-                    {prod.variants.length} Variações
-                  </span>
+                  {/* Stock Badge Top-Right */}
+                  <div className="absolute top-1.5 right-1.5">
+                    <span
+                      className={`px-1.5 py-0.5 rounded text-[8px] font-sans font-bold uppercase tracking-wider backdrop-blur-md border ${getStockBadgeStyle(
+                        prod
+                      )}`}
+                    >
+                      {prod.quantity} un
+                    </span>
+                  </div>
+
+                  {/* Variations Pill if any */}
+                  {prod.variants && prod.variants.length > 0 && (
+                    <div className="absolute bottom-1.5 left-1.5">
+                      <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-[#ffd56d] text-black shadow flex items-center gap-0.5">
+                        <Sparkles className="w-2 h-2 stroke-[3]" />
+                        {prod.variants.length} var
+                      </span>
+                    </div>
+                  )}
                 </div>
-              )}
 
-              {/* Stock status pill */}
-              <div className="absolute top-3 right-3" id={`inv-badge-container-${prod.id}`}>
-                <span className={`px-2.5 py-1 rounded-lg text-[9px] uppercase tracking-wider font-bold border backdrop-blur-xs ${getStockBadgeStyle(prod)}`} id={`inv-badge-${prod.id}`}>
-                  {prod.quantity <= prod.minStock ? 'Pouco Estoque' : `${prod.quantity} UNID.`}
-                </span>
-              </div>
+                {/* Content Area */}
+                <div className="p-2 sm:p-2.5 flex flex-col justify-between flex-1 space-y-1.5">
+                  <div>
+                    <h3
+                      className="font-sans font-bold text-xs text-white group-hover:text-[#ffd56d] transition truncate"
+                      title={prod.name}
+                    >
+                      {prod.name}
+                    </h3>
+                    <span className="font-serif text-[#ffd56d] font-bold text-xs sm:text-sm tracking-tight block pt-0.5">
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(prod.price)}
+                    </span>
+                  </div>
 
-              {/* Low stock count if low */}
-              {prod.quantity <= prod.minStock && (
-                <div className="absolute bottom-3 left-3 bg-brand-red px-2 py-0.5 rounded text-[8px] font-bold text-white uppercase tracking-wider" id={`inv-low-warning-${prod.id}`}>
-                  Apenas {prod.quantity} un restantes
+                  {/* Fast Actions Footer */}
+                  <div
+                    className="flex items-center gap-1 pt-1.5 border-t border-white/10"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {onOpenPrintTag && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onOpenPrintTag(prod);
+                        }}
+                        className="p-1 rounded-lg bg-black/40 hover:bg-[#D4A017]/20 border border-white/10 text-gray-400 hover:text-[#ffd56d] transition cursor-pointer"
+                        title="Imprimir Etiqueta"
+                      >
+                        <Printer className="w-3 h-3" />
+                      </button>
+                    )}
+
+                    {/* Vender button: jumps red dot to floating $ cart */}
+                    <button
+                      type="button"
+                      onClick={(e) => handleVenderClick(e, prod)}
+                      className="flex-1 py-1 px-1.5 rounded-lg bg-gradient-to-r from-[#D4A017] via-[#ffd56d] to-[#C59B27] hover:brightness-105 active:scale-95 text-black font-sans font-black text-[10px] sm:text-xs uppercase tracking-wider shadow flex items-center justify-center gap-1 transition cursor-pointer"
+                      title="Adicionar ao carrinho de venda"
+                    >
+                      <Tag className="w-2.5 h-2.5 stroke-[2.8]" />
+                      <span>Vender</span>
+                    </button>
+                  </div>
                 </div>
-              )}
-            </div>
+              </motion.div>
+            );
+          }
 
-            {/* Content area */}
-            <div 
-              className="flex-1 p-4 flex flex-col justify-between cursor-pointer" 
+          /* ============================================================
+             COLUNA 2 EDITORIAL HAUTE LUXURY CARD (coluna2 specification)
+             ============================================================ */
+          return (
+            <motion.div
+              key={`inv-prod-2col-${prod.id}-${idx}`}
+              layout
               onClick={() => setDetailProd(prod)}
-              id={`inv-content-${prod.id}`}
+              className="relative flex flex-col rounded-2xl border border-white/10 bg-[#1C1C1E] shadow-xl overflow-hidden group hover:border-[#ffd56d]/50 transition duration-200 cursor-pointer"
+              id={`inv-card-${prod.id}`}
             >
-              <div className="space-y-1.5" id={`inv-desc-${prod.id}`}>
-                <div className="flex items-center justify-between" id={`inv-cat-row-${prod.id}`}>
-                  <span className="text-[10px] text-gray-500 font-mono font-medium" id={`inv-sku-${prod.id}`}>
+              {/* Image Area with SKU and Stock Badges */}
+              <div className="relative h-44 sm:h-52 w-full overflow-hidden bg-black/60">
+                <img
+                  src={prod.imageUrl || LUXURY_IMAGE_FALLBACK}
+                  alt={prod.name}
+                  referrerPolicy="no-referrer"
+                  className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
+                  onError={(e) => {
+                    (e.currentTarget as HTMLImageElement).src = LUXURY_IMAGE_FALLBACK;
+                  }}
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-[#1C1C1E] via-transparent to-black/35 pointer-events-none" />
+
+                {/* SKU Badge Top-Left */}
+                <div className="absolute top-2.5 left-2.5">
+                  <span className="px-2 py-0.5 rounded-md text-[9px] font-mono font-bold bg-black/80 backdrop-blur-md text-[#ffd56d] border border-white/10 shadow">
                     {prod.sku}
                   </span>
-                  <span className="text-[9px] bg-brand-tertiary px-2 py-0.5 rounded text-gray-400 font-sans" id={`inv-category-${prod.id}`}>
+                </div>
+
+                {/* Stock Status Pill Top-Right */}
+                <div className="absolute top-2.5 right-2.5">
+                  <span
+                    className={`px-2 py-0.5 rounded-md text-[9px] font-sans font-bold uppercase tracking-wider backdrop-blur-md border ${getStockBadgeStyle(
+                      prod
+                    )}`}
+                  >
+                    {prod.quantity <= (prod.minStock || 0) ? 'Pouco Estoque' : `${prod.quantity} un`}
+                  </span>
+                </div>
+
+                {/* Variations count badge if any */}
+                {prod.variants && prod.variants.length > 0 && (
+                  <div className="absolute bottom-2.5 left-2.5">
+                    <span className="px-2 py-0.5 rounded-md text-[9px] uppercase font-bold bg-[#ffd56d] text-black shadow flex items-center gap-1">
+                      <Sparkles className="w-2.5 h-2.5 stroke-[3]" />
+                      {prod.variants.length} Variações
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Content Area */}
+              <div className="p-3 sm:p-4 flex flex-col justify-between flex-1 space-y-2">
+                <div>
+                  <span className="text-[10px] text-[#D4A017] uppercase tracking-wider font-bold block truncate">
                     {prod.category}
                   </span>
+                  <h3
+                    className="font-sans font-bold text-xs sm:text-sm text-white group-hover:text-[#ffd56d] transition truncate pt-0.5"
+                    title={prod.name}
+                  >
+                    {prod.name}
+                  </h3>
+                  <p className="text-[11px] text-[#8E8E93] line-clamp-1 pt-0.5">
+                    {prod.description || `${prod.supplier || 'Marento'} • Acervo`}
+                  </p>
                 </div>
 
-                <h3
-                  className="font-sans font-bold text-sm text-brand-neutral group-hover:text-brand-primary transition truncate"
-                  id={`inv-name-${prod.id}`}
-                  title="Clique para visualizar detalhes completos"
-                >
-                  {prod.name}
-                </h3>
-                
-                <p className="text-[11px] text-gray-500 line-clamp-2 leading-relaxed" id={`inv-short-desc-${prod.id}`}>
-                  {prod.description || 'Nenhuma descrição inserida para este item do acervo de luxo.'}
-                </p>
-
-                <div className="flex items-center justify-between pt-1 border-t border-brand-tertiary/40" id={`inv-price-supplier-row-${prod.id}`}>
-                  <span className="font-serif text-brand-primary font-bold text-sm" id={`inv-price-${prod.id}`}>
+                {/* Price Display */}
+                <div className="pt-0.5">
+                  <span className="font-serif text-[#ffd56d] font-bold text-base sm:text-lg tracking-tight block">
                     {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(prod.price)}
                   </span>
-                  <span className="text-[8px] text-gray-400 truncate max-w-[110px]" id={`inv-supplier-${prod.id}`}>
-                    {prod.supplier}
-                  </span>
-                </div>
-              </div>
-
-              {/* Interactive Quick action panel */}
-              <div 
-                className="flex items-center justify-between gap-1.5 mt-4 pt-3 border-t border-brand-tertiary/60" 
-                onClick={(e) => e.stopPropagation()}
-                id={`inv-actions-${prod.id}`}
-              >
-                {/* Stock Indicator Badge */}
-                <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-brand-bg border border-brand-tertiary/70 shadow-inner" id={`inv-stock-badge-${prod.id}`}>
-                  <span className="text-[10px] text-gray-400 font-sans uppercase font-bold tracking-wider">Estoque:</span>
-                  <span className={`text-xs font-mono font-bold ${prod.quantity <= (prod.minStock || 0) ? 'text-amber-400' : 'text-brand-neutral'}`}>
-                    {prod.quantity} un
-                  </span>
                 </div>
 
-                {/* Print Tag, Edit & Delete actions (eye button removed as requested, click card opens details) */}
-                <div className="flex items-center gap-1" id={`inv-edit-delete-${prod.id}`}>
-                  {onOpenPrintTag && (
+                {/* Action Footer: Tag print, edit and Vender button */}
+                <div
+                  className="flex items-center justify-between gap-1.5 pt-2 border-t border-white/10"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="flex items-center gap-1">
+                    {onOpenPrintTag && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onOpenPrintTag(prod);
+                        }}
+                        className="p-1.5 rounded-lg bg-black/40 hover:bg-[#D4A017]/20 border border-white/10 text-gray-400 hover:text-[#ffd56d] transition cursor-pointer"
+                        title="Imprimir Etiqueta"
+                      >
+                        <Printer className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                     <button
+                      type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        onOpenPrintTag(prod);
+                        handleOpenEdit(prod);
                       }}
-                      className="p-2 rounded-lg bg-brand-bg hover:bg-brand-primary/20 border border-brand-tertiary/60 text-gray-400 hover:text-brand-primary transition cursor-pointer"
-                      title="Imprimir Etiqueta de Código de Barras"
-                      id={`inv-btn-print-${prod.id}`}
+                      className="p-1.5 rounded-lg bg-black/40 hover:bg-white/10 border border-white/10 text-gray-400 hover:text-white transition cursor-pointer"
+                      title="Editar Produto"
                     >
-                      <Printer className="w-3.5 h-3.5" />
+                      <Edit className="w-3.5 h-3.5" />
                     </button>
-                  )}
+                  </div>
 
+                  {/* Vender button: jumps red dot to floating $ cart */}
                   <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleOpenEdit(prod);
-                    }}
-                    className="p-2 rounded-lg bg-brand-bg hover:bg-brand-tertiary border border-brand-tertiary/60 text-gray-400 hover:text-brand-primary transition cursor-pointer"
-                    title="Editar produto"
-                    id={`inv-btn-edit-${prod.id}`}
+                    type="button"
+                    onClick={(e) => handleVenderClick(e, prod)}
+                    className="flex-1 py-1.5 px-2 rounded-xl bg-gradient-to-r from-[#D4A017] via-[#ffd56d] to-[#C59B27] hover:brightness-105 active:scale-95 text-black font-sans font-black text-xs uppercase tracking-wider shadow-md flex items-center justify-center gap-1 transition cursor-pointer"
+                    title="Adicionar ao carrinho de venda"
                   >
-                    <Edit className="w-3.5 h-3.5" />
+                    <Tag className="w-3 h-3 stroke-[2.8]" />
+                    <span>Vender</span>
                   </button>
-                  {deletingId === prod.id ? (
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => {
-                          onDeleteProduct(prod.id);
-                          setDeletingId(null);
-                        }}
-                        className="px-2 py-1.5 rounded-lg bg-brand-red text-white text-[10px] font-bold transition hover:bg-brand-red/80 cursor-pointer"
-                        id={`inv-btn-delete-confirm-${prod.id}`}
-                      >
-                        Confirmar
-                      </button>
-                      <button
-                        onClick={() => setDeletingId(null)}
-                        className="px-2 py-1.5 rounded-lg bg-brand-tertiary text-gray-300 text-[10px] transition hover:text-white cursor-pointer"
-                        id={`inv-btn-delete-cancel-${prod.id}`}
-                      >
-                        Sair
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => setDeletingId(prod.id)}
-                      className="p-2 rounded-lg bg-brand-bg hover:bg-brand-red/10 border border-brand-tertiary/60 text-gray-400 hover:text-brand-red transition cursor-pointer"
-                      title="Excluir produto"
-                      id={`inv-btn-delete-${prod.id}`}
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  )}
                 </div>
-
               </div>
-            </div>
-          </motion.div>
-        ))}
+            </motion.div>
+          );
+        })}
 
         {filteredProducts.length === 0 && (
           <div className="col-span-full text-center py-12 text-gray-500 bg-brand-secondary/30 rounded-2xl border border-dashed border-brand-tertiary" id="inv-empty">
@@ -1052,8 +1233,43 @@ export default function InventoryView({
           }}
           onOpenEdit={(p) => handleOpenEdit(p)}
           onOpenPrintTag={(p, v) => onOpenPrintTag && onOpenPrintTag(p, v)}
+          onDeleteProduct={onDeleteProduct}
         />
       )}
+
+      {/* Flying Red Dots Animation: leaping from product card straight into floating $ cart */}
+      <AnimatePresence>
+        {flyingDots.map((dot) => (
+          <motion.div
+            key={dot.id}
+            initial={{
+              left: dot.startX,
+              top: dot.startY,
+              scale: 1.4,
+              opacity: 1,
+            }}
+            animate={{
+              left: dot.endX,
+              top: dot.endY,
+              scale: 0.5,
+              opacity: 0.9,
+            }}
+            transition={{
+              duration: 0.55,
+              ease: [0.22, 1, 0.36, 1],
+            }}
+            onAnimationComplete={() => {
+              setFlyingDots((prev) => prev.filter((d) => d.id !== dot.id));
+              const fab = document.getElementById('global-sales-fab');
+              if (fab) {
+                fab.classList.add('scale-125');
+                setTimeout(() => fab.classList.remove('scale-125'), 180);
+              }
+            }}
+            className="fixed pointer-events-none z-[9999] -translate-x-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-red-600 shadow-[0_0_15px_rgba(239,68,68,1)] border-2 border-white ring-2 ring-red-400"
+          />
+        ))}
+      </AnimatePresence>
 
     </div>
   );

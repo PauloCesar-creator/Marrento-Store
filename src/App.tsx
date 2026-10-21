@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   LayoutGrid,
@@ -30,7 +30,7 @@ import PrintTagModal from './components/PrintTagModal';
 import PrintReceiptModal from './components/PrintReceiptModal';
 import NfceModal from './components/NfceModal';
 import LoginModal from './components/LoginModal';
-import SalesPanelModal from './components/SalesPanelModal';
+import SalesPanelModal, { CartItem } from './components/SalesPanelModal';
 import marrentoLogo from '../assets/img/marrento store logo.jpg';
 import { useBarcodeScanner } from './utils/useBarcodeScanner';
 import { generateUUID } from './utils/uuid';
@@ -54,6 +54,38 @@ import {
   dbSaveMonthlyClosing,
   dbDeleteMonthlyClosing
 } from './lib/dbService';
+
+/**
+ * Resilient localStorage setter that catches QuotaExceededError
+ * and protects database & app from crashing when rich media is stored.
+ */
+function safeLocalStorageSet(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value);
+  } catch (err: any) {
+    if (err?.name === 'QuotaExceededError' || err?.code === 22) {
+      console.warn(`[LocalStorage Quota Warning] Limit reached for "${key}". Trimming base64 images from offline cache.`);
+      try {
+        if (key === 'marento_products') {
+          const prods = JSON.parse(value);
+          const trimmed = prods.map((p: any) => ({
+            ...p,
+            imageUrl: p.imageUrl?.startsWith('data:') ? '' : p.imageUrl,
+            variants: p.variants?.map((v: any) => ({
+              ...v,
+              imageUrl: v.imageUrl?.startsWith('data:') ? '' : v.imageUrl,
+            })),
+          }));
+          localStorage.setItem(key, JSON.stringify(trimmed));
+        }
+      } catch (inner) {
+        console.warn('Could not store fallback trimmed products:', inner);
+      }
+    } else {
+      console.warn('LocalStorage save error:', err);
+    }
+  }
+}
 
 export default function App() {
   // 1. Core Persistent States (with localStorage fallback)
@@ -136,10 +168,65 @@ export default function App() {
     }
   };
 
-  // 3. Sales Panel Modal States
+  // 3. Sales Panel Modal States & Multi-Item Cart
   const [isSalesPanelOpen, setIsSalesPanelOpen] = useState(false);
   const [salesPanelProductId, setSalesPanelProductId] = useState<string | undefined>(undefined);
   const [salesPanelVariantId, setSalesPanelVariantId] = useState<string | undefined>(undefined);
+  const [cartItems, setCartItems] = useState<CartItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('marento_cart_items');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const totalCartCount = useMemo(() => {
+    return cartItems.reduce((sum, item) => sum + (item.quantity || 0), 0);
+  }, [cartItems]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('marento_cart_items', JSON.stringify(cartItems));
+    } catch {
+      // ignore
+    }
+  }, [cartItems]);
+
+  const handleAddToCart = (product: Product, variant?: ProductVariant, qtyToAdd = 1) => {
+    const maxStock = variant ? variant.quantity : product.quantity;
+    if (maxStock <= 0) return;
+
+    const cartItemId = `${product.id}-${variant ? variant.id : 'base'}`;
+    setCartItems((prev) => {
+      const existingIdx = prev.findIndex((i) => i.id === cartItemId);
+      if (existingIdx >= 0) {
+        const existing = prev[existingIdx];
+        const newQty = Math.min(maxStock, existing.quantity + qtyToAdd);
+        const updated = [...prev];
+        updated[existingIdx] = {
+          ...existing,
+          quantity: newQty,
+          availableStock: maxStock,
+        };
+        return updated;
+      } else {
+        return [
+          ...prev,
+          {
+            id: cartItemId,
+            productId: product.id,
+            variantId: variant?.id,
+            product,
+            variant,
+            quantity: Math.min(qtyToAdd, maxStock),
+            unitPrice: product.price || 0,
+            availableStock: maxStock,
+          },
+        ];
+      }
+    });
+  };
 
   // 4. Barcode Scanner, Printer & NFC-e Modals States
   const [isScannerOpen, setIsScannerOpen] = useState(false);
@@ -190,7 +277,7 @@ export default function App() {
 
   // Sync state to localStorage on any state modification
   useEffect(() => {
-    localStorage.setItem('marento_products', JSON.stringify(products));
+    safeLocalStorageSet('marento_products', JSON.stringify(products));
   }, [products]);
 
   useEffect(() => {
@@ -343,7 +430,7 @@ export default function App() {
       salesCount: 0,
     }));
     setProducts(updatedProducts);
-    localStorage.setItem('marento_products', JSON.stringify(updatedProducts));
+    safeLocalStorageSet('marento_products', JSON.stringify(updatedProducts));
     await dbResetProductsSalesCount();
 
     // 4. Clear temporary notifications
@@ -386,7 +473,7 @@ export default function App() {
 
         // 3. Products sync (Supabase as single source of truth - respect user deletions)
         setProducts(remoteProds);
-        localStorage.setItem('marento_products', JSON.stringify(remoteProds));
+        safeLocalStorageSet('marento_products', JSON.stringify(remoteProds));
 
         // 4. Transactions sync (Supabase as source of truth)
         const lastResetStr = localStorage.getItem('marento_last_reset_time');
@@ -435,7 +522,7 @@ export default function App() {
           async () => {
             const remoteProds = await dbFetchProducts();
             setProducts(remoteProds);
-            localStorage.setItem('marento_products', JSON.stringify(remoteProds));
+            safeLocalStorageSet('marento_products', JSON.stringify(remoteProds));
           }
         )
         .on(
@@ -444,7 +531,7 @@ export default function App() {
           async () => {
             const remoteProds = await dbFetchProducts();
             setProducts(remoteProds);
-            localStorage.setItem('marento_products', JSON.stringify(remoteProds));
+            safeLocalStorageSet('marento_products', JSON.stringify(remoteProds));
           }
         )
         .on(
@@ -536,7 +623,7 @@ export default function App() {
     });
     setProducts((prevProds) => {
       const updated = prevProds.map((prod) => prod.category === oldName ? { ...prod, category: cleanNewName } : prod);
-      localStorage.setItem('marento_products', JSON.stringify(updated));
+      safeLocalStorageSet('marento_products', JSON.stringify(updated));
       return updated;
     });
     if (selectedCategory === oldName) {
@@ -679,7 +766,7 @@ export default function App() {
   const handleDeleteProduct = async (id: string) => {
     setProducts((prev) => {
       const remaining = prev.filter((p) => p.id !== id && p.sku !== id);
-      localStorage.setItem('marento_products', JSON.stringify(remaining));
+      safeLocalStorageSet('marento_products', JSON.stringify(remaining));
       return remaining;
     });
     // Preserva o histórico de vendas/transações (não apaga transactions)
@@ -754,7 +841,7 @@ export default function App() {
           };
           setProducts((prev) => {
             const updated = prev.map((p) => (p.id === productId ? updatedWithRemaining : p));
-            localStorage.setItem('marento_products', JSON.stringify(updated));
+            safeLocalStorageSet('marento_products', JSON.stringify(updated));
             return updated;
           });
           prodRes = await dbSaveProduct(updatedWithRemaining);
@@ -764,7 +851,7 @@ export default function App() {
           // Era a última variação: apaga o produto completo do estoque
           setProducts((prev) => {
             const remaining = prev.filter((p) => p.id !== productId && p.sku !== baseProd.sku);
-            localStorage.setItem('marento_products', JSON.stringify(remaining));
+            safeLocalStorageSet('marento_products', JSON.stringify(remaining));
             return remaining;
           });
           await dbDeleteProduct(productId);
@@ -773,7 +860,7 @@ export default function App() {
         // Produto sem variações: apaga o produto completo do estoque
         setProducts((prev) => {
           const remaining = prev.filter((p) => p.id !== productId && p.sku !== baseProd.sku);
-          localStorage.setItem('marento_products', JSON.stringify(remaining));
+          safeLocalStorageSet('marento_products', JSON.stringify(remaining));
           return remaining;
         });
         await dbDeleteProduct(productId);
@@ -782,7 +869,7 @@ export default function App() {
       // Atualização normal de estoque
       setProducts((prev) => {
         const updated = prev.map((p) => (p.id === productId ? updatedProduct : p));
-        localStorage.setItem('marento_products', JSON.stringify(updated));
+        safeLocalStorageSet('marento_products', JSON.stringify(updated));
         return updated;
       });
       // Sincroniza estoque atualizado com o Supabase
@@ -1016,6 +1103,9 @@ export default function App() {
                 onOpenPrintTag={handleOpenPrintTag}
                 autoDeleteCategories={autoDeleteCategories}
                 onToggleCategoryAutoDelete={handleToggleCategoryAutoDelete}
+                onAddToCart={handleAddToCart}
+                cartCount={totalCartCount}
+                onOpenSalesPanel={() => handleOpenSalesPanel()}
               />
             )}
 
@@ -1121,13 +1211,29 @@ export default function App() {
         <motion.button
           whileHover={{ scale: 1.08 }}
           whileTap={{ scale: 0.94 }}
-          onClick={() => handleOpenSalesPanel()}
-          className="flex items-center justify-center w-14 h-14 rounded-full bg-gradient-to-tr from-[#D4A017] via-[#F3E5AB] to-[#C59B27] text-black shadow-[0_0_25px_rgba(212,160,23,0.5)] border border-[#ffd56d]/60 transition cursor-pointer relative group"
+          onClick={() => {
+            setSalesPanelProductId(undefined);
+            setSalesPanelVariantId(undefined);
+            setIsSalesPanelOpen(true);
+          }}
+          className="flex items-center justify-center w-14 h-14 rounded-full bg-gradient-to-tr from-[#D4A017] via-[#F3E5AB] to-[#C59B27] text-black shadow-[0_0_25px_rgba(212,160,23,0.5)] border border-[#ffd56d]/60 transition-transform duration-200 cursor-pointer relative group"
           title="Painel de Venda (PDV Express)"
           id="global-sales-fab"
         >
           <DollarSign className="w-7 h-7 stroke-[2.8]" />
           <span className="sr-only">Painel de Venda</span>
+
+          {/* Red Cart Counter Badge */}
+          {totalCartCount > 0 && (
+            <motion.span
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              className="absolute -top-1.5 -right-1.5 min-w-[22px] h-[22px] px-1 rounded-full bg-red-600 text-white text-[11px] font-black flex items-center justify-center border-2 border-[#121214] shadow-lg shadow-red-600/50"
+              id="sales-fab-cart-badge"
+            >
+              {totalCartCount}
+            </motion.span>
+          )}
         </motion.button>
       </div>
 
@@ -1136,11 +1242,14 @@ export default function App() {
         isOpen={isSalesPanelOpen}
         onClose={() => {
           setIsSalesPanelOpen(false);
+          setSalesPanelProductId(undefined);
           setSalesPanelVariantId(undefined);
         }}
         products={products}
         initialProductId={salesPanelProductId}
         initialVariantId={salesPanelVariantId}
+        initialCartItems={cartItems}
+        onUpdateCart={setCartItems}
         onConfirmSale={handleConfirmSale}
         onOpenPrintReceipt={(tx) => {
           setPrintReceiptTx(tx);

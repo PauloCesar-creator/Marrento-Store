@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { X, Printer, Check, Tag as TagIcon, Sparkles, Sliders } from 'lucide-react';
 import { Product, ProductVariant } from '../types';
 import BarcodeDisplay from './BarcodeDisplay';
+import { useModalHistory } from '../utils/useModalHistory';
 
 interface PrintTagModalProps {
   isOpen: boolean;
@@ -17,6 +18,8 @@ export default function PrintTagModal({
   product,
   selectedVariant,
 }: PrintTagModalProps) {
+  useModalHistory(isOpen, onClose, 'print_tag');
+
   const [tagQuantity, setTagQuantity] = useState<number>(1);
   const [barcodeType, setBarcodeType] = useState<'code128' | 'qrcode'>('code128');
   const [labelSize, setLabelSize] = useState<'58mm' | '80mm' | '50x30' | '40x25' | 'a4'>('58mm');

@@ -2,25 +2,26 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   ChevronLeft,
-  User,
   Tag,
-  Sparkles,
   Check,
   Plus,
-  Upload,
   FolderOpen,
+  Camera,
   X,
   Edit2,
   Trash2,
-  Layers,
-  ArrowRight,
   Printer,
-  Edit
+  Edit,
+  Sparkles,
+  Layers,
+  AlertTriangle,
+  ShoppingBag
 } from 'lucide-react';
 import { Product, ProductVariant } from '../types';
 import { generateUUID } from '../utils/uuid';
 import { generateVariantCode, generateVariantBarcode } from '../utils/variantCode';
-import { compressImageFile } from '../lib/imageUtils';
+import { compressImageFile, LUXURY_IMAGE_FALLBACK } from '../lib/imageUtils';
+import { useModalHistory } from '../utils/useModalHistory';
 
 interface ProductDetailModalProps {
   product: Product | null;
@@ -29,6 +30,8 @@ interface ProductDetailModalProps {
   onUpdateProduct?: (product: Product) => void;
   onOpenEdit?: (product: Product) => void;
   onOpenPrintTag?: (product: Product, variant?: ProductVariant) => void;
+  onDeleteProduct?: (id: string) => void;
+  onAddToCart?: (product: Product, variant?: ProductVariant) => void;
 }
 
 export default function ProductDetailModal({
@@ -38,7 +41,12 @@ export default function ProductDetailModal({
   onUpdateProduct,
   onOpenEdit,
   onOpenPrintTag,
+  onDeleteProduct,
+  onAddToCart,
 }: ProductDetailModalProps) {
+  // Native back button integration
+  useModalHistory(isOpen, onClose, 'product_detail');
+
   const variants = product?.variants || [];
   const [selectedVariantId, setSelectedVariantId] = useState<string | 'main'>(
     variants.length > 0 ? variants[0].id : 'main'
@@ -56,22 +64,41 @@ export default function ProductDetailModal({
   const [newVarQty, setNewVarQty] = useState<number>(1);
   const [newVarImage, setNewVarImage] = useState('');
   const [isProcessingImage, setIsProcessingImage] = useState(false);
+  const [imageError, setImageError] = useState('');
+
+  // Delete product confirmation state
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
 
   if (!isOpen || !product) return null;
 
   const currentVariant = variants.find((v) => v.id === selectedVariantId);
-  const heroImage =
-    currentVariant?.imageUrl ||
-    product.imageUrl ||
-    'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?auto=format&fit=crop&w=800&q=80';
+  const isBaseItem = selectedVariantId === 'main';
 
-  const heroTag = currentVariant?.name || product.name;
-  const heroStock = currentVariant ? currentVariant.quantity : product.quantity;
+  const rawHeroImage =
+    (!isBaseItem ? currentVariant?.imageUrl : null) ||
+    product.imageUrl ||
+    '';
+  const heroImage = rawHeroImage.trim() ? rawHeroImage : LUXURY_IMAGE_FALLBACK;
+
+  const heroTag = !isBaseItem && currentVariant ? currentVariant.name : product.name;
+  const heroStock = !isBaseItem && currentVariant ? currentVariant.quantity : product.quantity;
 
   const totalQuantity =
     variants.length > 0
       ? variants.reduce((sum, v) => sum + (v.quantity || 0), 0)
       : product.quantity;
+
+  // Handle clicking the hero image: opens edit panel for base item or variant
+  const handleHeroImageClick = () => {
+    if (isBaseItem) {
+      if (onOpenEdit) {
+        onClose();
+        onOpenEdit(product);
+      }
+    } else if (currentVariant) {
+      handleStartEdit(currentVariant);
+    }
+  };
 
   const handleStartEdit = (v: ProductVariant) => {
     setSelectedVariantId(v.id);
@@ -126,6 +153,8 @@ export default function ProductDetailModal({
   const handleAddNewVariant = (e: React.FormEvent) => {
     e.preventDefault();
     const trimmedName = newVarName.trim();
+    if (!trimmedName) return;
+
     const uniqueCode = generateVariantCode(product.sku, variants.length, trimmedName, variants);
     const uniqueBarcode = generateVariantBarcode(product.sku, variants.length, trimmedName);
 
@@ -133,10 +162,7 @@ export default function ProductDetailModal({
       id: generateUUID(),
       name: trimmedName,
       quantity: Math.max(0, newVarQty),
-      imageUrl:
-        newVarImage.trim() ||
-        product.imageUrl ||
-        'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?auto=format&fit=crop&w=600&q=80',
+      imageUrl: newVarImage.trim() || undefined,
       sku: uniqueCode,
       code: uniqueCode,
       barcode: uniqueBarcode,
@@ -151,7 +177,9 @@ export default function ProductDetailModal({
       quantity: newTotal,
     };
 
-    onUpdateProduct(updatedProduct);
+    if (onUpdateProduct) {
+      onUpdateProduct(updatedProduct);
+    }
     setSelectedVariantId(newVar.id);
     setNewVarName('');
     setNewVarQty(1);
@@ -159,74 +187,90 @@ export default function ProductDetailModal({
     setIsAddingNewVar(false);
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, isNew = false) => {
+  // Mobile camera / gallery file upload handler
+  const handleFileUpload = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+    target: 'newVar' | 'editVar' | 'mainProduct'
+  ) => {
     const file = e.target.files?.[0];
-    if (file) {
-      try {
-        setIsProcessingImage(true);
-        const compressed = await compressImageFile(file, 800, 800, 0.82);
-        if (isNew) {
-          setNewVarImage(compressed);
-        } else {
-          setEditVarImage(compressed);
+    if (!file) return;
+
+    try {
+      setIsProcessingImage(true);
+      setImageError('');
+      const compressed = await compressImageFile(file, 640, 640, 0.78);
+
+      if (target === 'newVar') {
+        setNewVarImage(compressed);
+      } else if (target === 'editVar') {
+        setEditVarImage(compressed);
+      } else if (target === 'mainProduct') {
+        if (onUpdateProduct) {
+          onUpdateProduct({
+            ...product,
+            imageUrl: compressed,
+          });
         }
-      } catch (err: any) {
-        console.error('Error compressing variant image:', err);
-      } finally {
-        setIsProcessingImage(false);
       }
+    } catch (err: any) {
+      console.error('Error compressing variant image:', err);
+      setImageError(err.message || 'Falha ao processar imagem.');
+    } finally {
+      setIsProcessingImage(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleConfirmDeleteProduct = () => {
+    if (onDeleteProduct) {
+      onDeleteProduct(product.id);
+      onClose();
     }
   };
 
   return (
     <AnimatePresence>
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 overflow-y-auto"
+        className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 overflow-y-auto"
         id="detalhes-overlay"
+        onClick={onClose}
       >
         {/* Backdrop */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          onClick={onClose}
           className="fixed inset-0 bg-black/85 backdrop-blur-md"
           id="detalhes-backdrop"
         />
 
-        {/* Full Modal Window matching 'detalhes.png' */}
+        {/* Modal Window: stops propagation so clicking inside does not close */}
         <motion.div
-          initial={{ opacity: 0, scale: 0.96, y: 20 }}
+          initial={{ opacity: 0, scale: 0.96, y: 15 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.96, y: 20 }}
+          exit={{ opacity: 0, scale: 0.96, y: 15 }}
           transition={{ type: 'spring', damping: 28, stiffness: 380 }}
-          className="relative z-10 w-full max-w-md bg-[#131315] border border-[#ffd56d]/20 sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col min-h-screen sm:min-h-0 sm:max-h-[95vh]"
+          className="relative z-10 w-full max-w-lg bg-[#131315] border border-[#ffd56d]/30 rounded-2xl sm:rounded-3xl shadow-2xl flex flex-col max-h-[92vh] sm:max-h-[88vh] overflow-hidden my-auto"
           id="detalhes-modal-window"
           onClick={(e) => e.stopPropagation()}
         >
-          {/* Top Bar with < Detalhes Da Peça and Quick Actions */}
-          <div className="flex items-center justify-between px-5 py-4 border-b border-white/5 bg-[#131315]/80 backdrop-blur-sm sticky top-0 z-20">
+          {/* Top Bar with Clear Header and High-Contrast Action Buttons */}
+          <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 border-b border-white/10 bg-[#131315]/95 backdrop-blur-md sticky top-0 z-30 shrink-0">
             <button
               onClick={onClose}
-              className="flex items-center gap-1.5 text-white hover:text-[#ffd56d] transition cursor-pointer"
+              className="flex items-center gap-1.5 text-white hover:text-[#ffd56d] transition cursor-pointer group"
+              title="Voltar / Fechar"
             >
-              <ChevronLeft className="w-6 h-6 stroke-[2.5]" />
-              <span className="font-serif font-bold text-lg text-white tracking-tight">
-                Detalhes Da Peça
+              <div className="p-1 rounded-lg group-hover:bg-white/10 transition">
+                <ChevronLeft className="w-5 h-5 text-[#ffd56d]" />
+              </div>
+              <span className="font-serif font-bold text-base sm:text-lg text-white tracking-tight">
+                Detalhes da Peça
               </span>
             </button>
 
+            {/* Top Right Quick Actions: Editar + Imprimir + Fechar (X) */}
             <div className="flex items-center gap-2">
-              {onOpenPrintTag && (
-                <button
-                  type="button"
-                  onClick={() => onOpenPrintTag(product, currentVariant)}
-                  className="p-2 rounded-full bg-[#1C1C1E] border border-white/10 text-[#ffd56d] hover:bg-[#ffd56d] hover:text-black transition cursor-pointer"
-                  title="Imprimir Etiqueta"
-                >
-                  <Printer className="w-4 h-4" />
-                </button>
-              )}
               {onOpenEdit && (
                 <button
                   type="button"
@@ -234,41 +278,92 @@ export default function ProductDetailModal({
                     onClose();
                     onOpenEdit(product);
                   }}
-                  className="p-2 rounded-full bg-[#1C1C1E] border border-white/10 text-gray-300 hover:text-white hover:bg-white/10 transition cursor-pointer"
-                  title="Editar dados gerais do produto"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#ffd56d]/15 hover:bg-[#ffd56d] text-[#ffd56d] hover:text-black border border-[#ffd56d]/40 font-bold text-xs transition cursor-pointer shadow-sm active:scale-95"
+                  title="Editar informações gerais do produto"
+                  id="btn-detalhes-editar-topo"
                 >
-                  <Edit className="w-4 h-4" />
+                  <Edit className="w-3.5 h-3.5" />
+                  <span className="hidden xs:inline">Editar</span>
                 </button>
               )}
-              <div className="w-9 h-9 rounded-full bg-[#ffdf97] flex items-center justify-center text-[#251a00] shadow-md">
-                <User className="w-5 h-5 fill-current" />
-              </div>
+
+              {onOpenPrintTag && (
+                <button
+                  type="button"
+                  onClick={() => onOpenPrintTag(product, currentVariant)}
+                  className="p-2 rounded-xl bg-[#1C1C1E] border border-white/10 text-[#ffd56d] hover:bg-[#ffd56d] hover:text-black transition cursor-pointer shadow-sm"
+                  title="Imprimir Etiqueta"
+                >
+                  <Printer className="w-4 h-4" />
+                </button>
+              )}
+
+              {/* Explicit Close Button (X) */}
+              <button
+                type="button"
+                onClick={onClose}
+                className="p-2 rounded-xl bg-white/5 hover:bg-white/15 border border-white/10 text-gray-300 hover:text-white transition cursor-pointer"
+                title="Fechar janela"
+                aria-label="Fechar"
+                id="btn-detalhes-fechar-topo"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
           </div>
 
           {/* Scrollable Body Content */}
-          <div className="p-5 overflow-y-auto space-y-5 flex-1 scrollbar-none">
-            {/* 1. Large Hero Image with floating pills */}
+          <div className="p-4 sm:p-6 overflow-y-auto space-y-5 flex-1 scrollbar-thin">
+            {/* 1. Large Hero Image - CLICKING OPENS EDIT PANEL (Base or Variant) */}
             <div className="space-y-3">
-              <div className="relative w-full h-72 sm:h-80 rounded-2xl overflow-hidden bg-black/80 border border-white/10 shadow-xl group">
+              <div
+                onClick={handleHeroImageClick}
+                className="relative w-full h-64 sm:h-76 rounded-2xl overflow-hidden bg-black/90 border border-white/10 shadow-xl group cursor-pointer"
+                title={isBaseItem ? 'Toque na imagem para editar o produto base' : `Toque na imagem para editar a variação ${currentVariant?.name}`}
+              >
                 <img
                   src={heroImage}
                   alt={heroTag}
-                  className="w-full h-full object-cover transition duration-300 group-hover:scale-102"
+                  className="w-full h-full object-cover transition duration-300 group-hover:scale-105"
+                  onError={(e) => {
+                    (e.currentTarget as HTMLImageElement).src = LUXURY_IMAGE_FALLBACK;
+                  }}
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent pointer-events-none" />
 
-                {/* Floating Bottom-Left Pill: 🏷 TAG / VARIATION NAME */}
-                <div className="absolute bottom-3 left-3 flex items-center gap-1.5 bg-[#121214]/90 backdrop-blur-md border border-[#E5B842]/40 text-[#ffd56d] px-3.5 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider shadow-lg">
-                  <Tag className="w-3.5 h-3.5 text-[#E5B842]" />
-                  <span className="truncate max-w-[170px]">{heroTag}</span>
+                {/* Edit hint banner on hover/tap */}
+                <div className="absolute top-3 left-3 flex items-center gap-1.5 bg-black/75 backdrop-blur-md border border-[#ffd56d]/40 text-[#ffd56d] px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider shadow">
+                  <Edit2 className="w-3 h-3 text-[#ffd56d]" />
+                  <span>{isBaseItem ? 'Toque para editar produto base' : 'Toque para editar variante'}</span>
                 </div>
 
-                {/* Floating Bottom-Right Pill: 10 UN */}
+                {/* Floating Bottom-Left Pill: 🏷 TAG / VARIATION NAME */}
+                <div className="absolute bottom-3 left-3 flex items-center gap-1.5 bg-[#121214]/90 backdrop-blur-md border border-[#E5B842]/50 text-[#ffd56d] px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider shadow-lg max-w-[65%]">
+                  <Tag className="w-3.5 h-3.5 text-[#E5B842] shrink-0" />
+                  <span className="truncate">{heroTag}</span>
+                </div>
+
+                {/* Floating Bottom-Right Pill: Quantity */}
                 <div className="absolute bottom-3 right-3 bg-[#f6be39] text-[#261a00] px-3.5 py-1.5 rounded-full font-sans font-black text-xs uppercase tracking-wider shadow-lg flex items-center gap-1">
                   <span>{heroStock}</span>
                   <span className="text-[10px] font-bold">UN</span>
                 </div>
+
+                {/* Floating Top-Right: Quick Camera / Upload photo button */}
+                <label
+                  onClick={(e) => e.stopPropagation()}
+                  className="absolute top-3 right-3 p-2 rounded-xl bg-black/75 hover:bg-black/95 backdrop-blur-md border border-white/20 text-[#ffd56d] hover:text-white transition cursor-pointer shadow-lg flex items-center gap-1.5 text-xs font-bold"
+                >
+                  <Camera className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Alterar Foto</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={(e) => handleFileUpload(e, isBaseItem ? 'mainProduct' : 'editVar')}
+                    className="hidden"
+                  />
+                </label>
               </div>
 
               {/* Horizontal Thumbnail Strip */}
@@ -276,17 +371,24 @@ export default function ProductDetailModal({
                 {/* Main Product Thumbnail */}
                 <button
                   type="button"
-                  onClick={() => setSelectedVariantId('main')}
-                  className={`w-14 h-14 rounded-xl overflow-hidden shrink-0 border-2 transition cursor-pointer ${
+                  onClick={() => {
+                    setSelectedVariantId('main');
+                    setIsEditingVariant(false);
+                  }}
+                  className={`w-14 h-14 rounded-xl overflow-hidden shrink-0 border-2 transition cursor-pointer bg-black/60 ${
                     selectedVariantId === 'main'
                       ? 'border-[#E5B842] ring-2 ring-[#E5B842]/50 scale-105 shadow-md'
                       : 'border-white/10 opacity-70 hover:opacity-100'
                   }`}
+                  title="Visão Geral (Base)"
                 >
                   <img
-                    src={product.imageUrl}
+                    src={product.imageUrl || LUXURY_IMAGE_FALLBACK}
                     alt={product.name}
                     className="w-full h-full object-cover"
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).src = LUXURY_IMAGE_FALLBACK;
+                    }}
                   />
                 </button>
 
@@ -295,62 +397,78 @@ export default function ProductDetailModal({
                   <button
                     key={v.id}
                     type="button"
-                    onClick={() => setSelectedVariantId(v.id)}
-                    className={`w-14 h-14 rounded-xl overflow-hidden shrink-0 border-2 transition cursor-pointer ${
+                    onClick={() => {
+                      setSelectedVariantId(v.id);
+                      setIsEditingVariant(false);
+                    }}
+                    className={`w-14 h-14 rounded-xl overflow-hidden shrink-0 border-2 transition cursor-pointer bg-black/60 ${
                       selectedVariantId === v.id
                         ? 'border-[#E5B842] ring-2 ring-[#E5B842]/50 scale-105 shadow-md'
                         : 'border-white/10 opacity-70 hover:opacity-100'
                     }`}
+                    title={v.name}
                   >
                     <img
-                      src={v.imageUrl || product.imageUrl}
+                      src={v.imageUrl || product.imageUrl || LUXURY_IMAGE_FALLBACK}
                       alt={v.name}
                       className="w-full h-full object-cover"
+                      onError={(e) => {
+                        (e.currentTarget as HTMLImageElement).src = LUXURY_IMAGE_FALLBACK;
+                      }}
                     />
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* 2. CATÁLOGO ATELIER & Title & Price Header */}
+            {/* 2. Brand & SKU & Title & Price Header */}
             <div className="space-y-1.5 pt-1">
               <div className="flex items-center justify-between text-xs">
-                <span className="text-[11px] font-bold uppercase tracking-widest text-[#D4A017] font-sans">
-                  CATÁLOGO ATELIER
+                <span className="text-[11px] font-bold uppercase tracking-widest text-[#D4A017] font-sans flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#E5B842] inline-block" />
+                  {product.category || 'ESTOQUE MARENTO'}
                 </span>
                 <span className="font-mono text-[11px] text-[#8E8E93] uppercase">
                   SKU: {product.sku}
                 </span>
               </div>
 
-              <h1 className="font-serif font-bold text-2xl text-white tracking-tight leading-snug">
+              <h1 className="font-serif font-bold text-xl sm:text-2xl text-white tracking-tight leading-snug">
                 {product.name}
               </h1>
 
-              {/* Price Row: R$ 50,00 + PREÇO UNITÁRIO FIXO pill */}
-              <div className="flex items-center gap-3 pt-1">
-                <span className="font-serif font-bold text-3xl text-[#ffd56d] tracking-tight">
-                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(product.price)}
-                </span>
-                <span className="px-2.5 py-1 rounded-md bg-[#1C1C1E] border border-white/10 text-[10px] font-bold text-[#8E8E93] uppercase tracking-wider">
-                  PREÇO UNITÁRIO FIXO
-                </span>
+              {/* Price & Supplier */}
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                <div className="flex items-baseline gap-2">
+                  <span className="font-serif font-bold text-2xl sm:text-3xl text-[#ffd56d] tracking-tight">
+                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(product.price)}
+                  </span>
+                  <span className="px-2 py-0.5 rounded-md bg-[#1C1C1E] border border-white/10 text-[10px] font-bold text-[#8E8E93] uppercase tracking-wider">
+                    PREÇO UNITÁRIO FIXO
+                  </span>
+                </div>
+
+                {product.supplier && (
+                  <span className="text-xs text-gray-400">
+                    Fornecedor: <strong className="text-gray-200">{product.supplier}</strong>
+                  </span>
+                )}
               </div>
             </div>
 
             {/* 3. Variations Selector Chips Grid */}
-            <div className="space-y-2.5 pt-2">
+            <div className="space-y-2.5 pt-1">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-bold uppercase tracking-wider text-[#D4A017] flex items-center gap-1.5">
-                  <span className="text-sm">❖</span> SELECIONE A VARIAÇÃO (COR / MODELO)
+                  <span>◆</span> SELECIONE A VARIAÇÃO (COR / MODELO)
                 </span>
                 <span className="text-[11px] text-[#8E8E93]">
-                  {variants.length} variantes
+                  {variants.length} {variants.length === 1 ? 'variação' : 'variações'}
                 </span>
               </div>
 
               {/* Grid of Variation Chips */}
-              <div className="grid grid-cols-2 gap-2.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 {variants.map((v) => {
                   const isSelected = selectedVariantId === v.id;
                   return (
@@ -367,20 +485,23 @@ export default function ProductDetailModal({
                           : 'bg-[#1C1C1E]/80 border-white/5 hover:border-white/20'
                       }`}
                     >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <div className="w-8 h-8 rounded-lg overflow-hidden bg-black shrink-0 border border-white/10">
+                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                        <div className="w-9 h-9 rounded-lg overflow-hidden bg-black shrink-0 border border-white/10">
                           <img
-                            src={v.imageUrl || product.imageUrl}
+                            src={v.imageUrl || product.imageUrl || LUXURY_IMAGE_FALLBACK}
                             alt={v.name}
                             className="w-full h-full object-cover"
+                            onError={(e) => {
+                              (e.currentTarget as HTMLImageElement).src = LUXURY_IMAGE_FALLBACK;
+                            }}
                           />
                         </div>
-                        <div className="min-w-0">
-                          <p className="text-xs font-bold text-white truncate max-w-[85px]">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-bold text-white truncate">
                             {v.name}
                           </p>
-                          <div className="flex items-center gap-1">
-                            <span className="text-[9px] font-mono text-amber-400 font-bold truncate max-w-[70px]">
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className="text-[9px] font-mono text-amber-400 font-bold truncate">
                               {v.code || v.sku || 'VAR'}
                             </span>
                             <span className="text-[9px] text-[#8E8E93]">&bull;</span>
@@ -407,7 +528,7 @@ export default function ProductDetailModal({
                     setIsAddingNewVar(true);
                     setIsEditingVariant(false);
                   }}
-                  className="flex items-center justify-center gap-2 p-2.5 rounded-2xl border border-dashed border-[#E5B842]/40 bg-[#141416] hover:bg-[#1C1C1E] text-[#ffd56d] transition cursor-pointer text-xs font-bold"
+                  className="flex items-center justify-center gap-2 p-3 rounded-2xl border border-dashed border-[#E5B842]/40 bg-[#141416] hover:bg-[#1C1C1E] text-[#ffd56d] transition cursor-pointer text-xs font-bold"
                 >
                   <Plus className="w-4 h-4 stroke-[2.5]" />
                   <span>Nova Variação</span>
@@ -419,11 +540,11 @@ export default function ProductDetailModal({
             <div className="bg-[#141416] border border-white/5 rounded-2xl p-4 space-y-2">
               <div className="flex items-center justify-between text-xs">
                 <span className="text-[#8E8E93]">Variação Ativa:</span>
-                <span className="font-bold text-white">
+                <span className="font-bold text-white truncate max-w-[200px] bg-[#222227] px-2.5 py-1 rounded-md border border-[#2c2c36]">
                   {currentVariant ? `${currentVariant.name} (${currentVariant.quantity} un)` : 'Geral (Base)'}
                 </span>
               </div>
-              <div className="flex items-center justify-between text-xs pt-1 border-t border-white/5">
+              <div className="flex items-center justify-between text-xs pt-2 border-t border-white/5">
                 <span className="text-[#8E8E93]">Estoque Total Somado:</span>
                 <div className="flex items-baseline gap-1">
                   <span className="font-serif font-bold text-xl text-[#ffd56d]">
@@ -434,18 +555,18 @@ export default function ProductDetailModal({
               </div>
             </div>
 
-            {/* 5. EDITAR VARIAÇÃO SELECIONADA BOX (Matching 'detalhes.png') */}
+            {/* 5. EDITAR VARIAÇÃO SELECIONADA BOX */}
             {isEditingVariant && currentVariant && (
-              <div className="bg-[#1C1C1E] border border-white/10 rounded-2xl p-4 space-y-3 animate-fade-in shadow-xl">
+              <div className="bg-[#1C1C1E] border border-white/10 rounded-2xl p-4 space-y-3 shadow-xl">
                 <div className="flex items-center justify-between border-b border-white/5 pb-2">
                   <div className="flex items-center gap-2 text-white font-bold text-xs font-sans">
                     <Edit2 className="w-4 h-4 text-[#ffd56d]" />
-                    <span>Editar Variação Selecionada</span>
+                    <span>Editar Variação: {currentVariant.name}</span>
                   </div>
                   <button
                     type="button"
                     onClick={() => setIsEditingVariant(false)}
-                    className="text-[#8E8E93] hover:text-white"
+                    className="p-1 text-[#8E8E93] hover:text-white"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -463,10 +584,10 @@ export default function ProductDetailModal({
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 items-end">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
                   <div className="space-y-1">
                     <label className="block text-[10px] font-bold uppercase tracking-wider text-[#D4A017]">
-                      QTD *
+                      QUANTIDADE *
                     </label>
                     <input
                       type="number"
@@ -495,7 +616,7 @@ export default function ProductDetailModal({
                             <input
                               type="file"
                               accept="image/*"
-                              onChange={(e) => handleFileUpload(e, false)}
+                              onChange={(e) => handleFileUpload(e, 'editVar')}
                               className="hidden"
                             />
                           </label>
@@ -510,19 +631,23 @@ export default function ProductDetailModal({
                         </button>
                       </div>
                     ) : (
-                      <label className="w-full py-2.5 px-2 bg-[#141416] border border-white/10 hover:border-[#ffd56d]/50 rounded-xl text-white text-[10px] font-bold transition flex items-center justify-center gap-1.5 cursor-pointer truncate">
-                        <FolderOpen className="w-3.5 h-3.5 text-[#ffd56d] shrink-0" />
-                        <span className="truncate">{isProcessingImage ? 'Carregando...' : 'Selecionar da Galeria'}</span>
+                      <label className="w-full py-2.5 px-3 bg-[#141416] border border-white/10 hover:border-[#ffd56d]/50 rounded-xl text-white text-[10px] font-bold transition flex items-center justify-center gap-1.5 cursor-pointer">
+                        <Camera className="w-3.5 h-3.5 text-[#ffd56d] shrink-0" />
+                        <span>{isProcessingImage ? 'Compactando...' : 'Foto da Câmera / Galeria'}</span>
                         <input
                           type="file"
                           accept="image/*"
-                          onChange={(e) => handleFileUpload(e, false)}
+                          onChange={(e) => handleFileUpload(e, 'editVar')}
                           className="hidden"
                         />
                       </label>
                     )}
                   </div>
                 </div>
+
+                {imageError && (
+                  <p className="text-red-400 text-[11px] font-medium">{imageError}</p>
+                )}
 
                 {/* Edit Actions: Excluir | Cancelar | Salvar */}
                 <div className="flex items-center justify-between gap-2 pt-2">
@@ -533,7 +658,7 @@ export default function ProductDetailModal({
                     title="Excluir esta variação"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
-                    <span>Excluir</span>
+                    <span>Excluir Variação</span>
                   </button>
                   <div className="flex items-center gap-2">
                     <button
@@ -556,9 +681,9 @@ export default function ProductDetailModal({
               </div>
             )}
 
-            {/* 6. NOVA VARIAÇÃO FORM (When user clicks ⊕ Nova Variação) */}
+            {/* 6. NOVA VARIAÇÃO FORM */}
             {isAddingNewVar && (
-              <form onSubmit={handleAddNewVariant} className="bg-[#1C1C1E] border border-[#E5B842]/40 rounded-2xl p-4 space-y-3 animate-fade-in shadow-xl">
+              <form onSubmit={handleAddNewVariant} className="bg-[#1C1C1E] border border-[#E5B842]/40 rounded-2xl p-4 space-y-3 shadow-xl">
                 <div className="flex items-center justify-between border-b border-white/5 pb-2">
                   <div className="flex items-center gap-2 text-white font-bold text-xs font-sans">
                     <Plus className="w-4 h-4 text-[#ffd56d]" />
@@ -567,7 +692,7 @@ export default function ProductDetailModal({
                   <button
                     type="button"
                     onClick={() => setIsAddingNewVar(false)}
-                    className="text-[#8E8E93] hover:text-white"
+                    className="p-1 text-[#8E8E93] hover:text-white"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -580,7 +705,7 @@ export default function ProductDetailModal({
                   <input
                     type="text"
                     required
-                    placeholder="Ex: Rose Gold, Couro Preto..."
+                    placeholder="Ex: Rose Gold, Couro Preto, Tamanho M..."
                     value={newVarName}
                     onChange={(e) => setNewVarName(e.target.value)}
                     className="w-full bg-[#141416] border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-[#E5B842]"
@@ -588,7 +713,7 @@ export default function ProductDetailModal({
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 items-end">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
                   <div className="space-y-1">
                     <label className="block text-[10px] font-bold uppercase tracking-wider text-[#D4A017]">
                       QUANTIDADE *
@@ -604,7 +729,7 @@ export default function ProductDetailModal({
 
                   <div className="space-y-1">
                     <label className="block text-[10px] font-bold uppercase tracking-wider text-[#D4A017]">
-                      FOTO DA VARIAÇÃO
+                      FOTO DA VARIAÇÃO (OPCIONAL)
                     </label>
                     {newVarImage ? (
                       <div className="flex items-center gap-2 p-1.5 bg-[#141416] border border-[#ffd56d]/30 rounded-xl">
@@ -620,7 +745,7 @@ export default function ProductDetailModal({
                             <input
                               type="file"
                               accept="image/*"
-                              onChange={(e) => handleFileUpload(e, true)}
+                              onChange={(e) => handleFileUpload(e, 'newVar')}
                               className="hidden"
                             />
                           </label>
@@ -635,13 +760,13 @@ export default function ProductDetailModal({
                         </button>
                       </div>
                     ) : (
-                      <label className="w-full py-2.5 px-2 bg-[#141416] border border-white/10 hover:border-[#ffd56d]/50 rounded-xl text-white text-[10px] font-bold transition flex items-center justify-center gap-1.5 cursor-pointer truncate">
-                        <FolderOpen className="w-3.5 h-3.5 text-[#ffd56d] shrink-0" />
-                        <span className="truncate">{isProcessingImage ? 'Carregando...' : 'Selecionar da Galeria'}</span>
+                      <label className="w-full py-2.5 px-3 bg-[#141416] border border-white/10 hover:border-[#ffd56d]/50 rounded-xl text-white text-[10px] font-bold transition flex items-center justify-center gap-1.5 cursor-pointer">
+                        <Camera className="w-3.5 h-3.5 text-[#ffd56d] shrink-0" />
+                        <span>{isProcessingImage ? 'Compactando...' : 'Foto da Câmera / Galeria'}</span>
                         <input
                           type="file"
                           accept="image/*"
-                          onChange={(e) => handleFileUpload(e, true)}
+                          onChange={(e) => handleFileUpload(e, 'newVar')}
                           className="hidden"
                         />
                       </label>
@@ -667,31 +792,89 @@ export default function ProductDetailModal({
                 </div>
               </form>
             )}
+
+            {/* 7. DANGER ZONE: EXCLUIR PRODUTO DO ACERVO */}
+            <div className="pt-2 border-t border-white/5">
+              {isConfirmingDelete ? (
+                <div className="p-3.5 rounded-2xl bg-red-950/40 border border-red-500/30 space-y-2.5">
+                  <div className="flex items-center gap-2 text-red-300 text-xs font-bold">
+                    <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
+                    <span>Confirmar exclusão deste produto do estoque?</span>
+                  </div>
+                  <p className="text-[11px] text-gray-400">
+                    O produto será removido do acervo. O histórico de movimentações e vendas anteriores será preservado.
+                  </p>
+                  <div className="flex items-center justify-end gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setIsConfirmingDelete(false)}
+                      className="px-3.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 text-xs font-bold transition cursor-pointer"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleConfirmDeleteProduct}
+                      className="px-4 py-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold transition cursor-pointer shadow-md"
+                      id="btn-confirm-delete-product"
+                    >
+                      Sim, Excluir Produto
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setIsConfirmingDelete(true)}
+                  className="w-full py-2.5 px-3 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 text-xs font-bold transition cursor-pointer flex items-center justify-center gap-2"
+                  id="btn-trigger-delete-product"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>Excluir Produto do Estoque</span>
+                </button>
+              )}
+            </div>
           </div>
 
-          {/* 7. Sticky Bottom Bar: Qtd. Total: 35 UN + Concluído Button */}
-          <div className="sticky bottom-0 z-20 bg-[#131315]/95 backdrop-blur-md border-t border-white/10 px-5 py-4 flex items-center justify-between">
+          {/* 8. Sticky Bottom Bar: Stock Summary + Both "Editar Produto" and "Fechar" buttons */}
+          <div className="sticky bottom-0 z-30 bg-[#131315]/95 backdrop-blur-md border-t border-white/10 px-4 sm:px-6 py-3.5 flex items-center justify-between shrink-0 gap-3">
             <div className="space-y-0.5">
               <span className="block text-[10px] uppercase font-bold text-[#8E8E93] tracking-wider">
                 Qtd. Total:
               </span>
               <div className="flex items-baseline gap-1">
-                <span className="font-serif font-black text-2xl text-[#ffd56d]">
+                <span className="font-serif font-black text-xl sm:text-2xl text-[#ffd56d]">
                   {totalQuantity}
                 </span>
                 <span className="text-xs font-bold text-[#8E8E93] uppercase">UN</span>
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={onClose}
-              className="py-3.5 px-8 rounded-2xl bg-[#E5B842] hover:bg-[#ffd56d] text-[#121214] font-sans font-bold text-xs uppercase tracking-wider flex items-center gap-2 shadow-xl transition cursor-pointer active:scale-98"
-              id="btn-detalhes-concluido"
-            >
-              <Check className="w-4 h-4 stroke-[3]" />
-              Concluído
-            </button>
+            <div className="flex items-center gap-2 sm:gap-3">
+              {onAddToCart && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onAddToCart(product, currentVariant);
+                    onClose();
+                  }}
+                  className="py-2.5 sm:py-3 px-3.5 sm:px-4 rounded-xl bg-[#ffd56d]/15 hover:bg-[#ffd56d] text-[#ffd56d] hover:text-black font-sans font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 border border-[#ffd56d]/30 transition cursor-pointer active:scale-98"
+                >
+                  <ShoppingBag className="w-3.5 h-3.5" />
+                  <span>Vender</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={onClose}
+                className="py-2.5 sm:py-3 px-5 sm:px-7 rounded-xl bg-[#E5B842] hover:bg-[#ffd56d] text-[#121214] font-sans font-black text-xs uppercase tracking-wider flex items-center gap-1.5 shadow-xl transition cursor-pointer active:scale-98"
+                id="btn-detalhes-concluido"
+              >
+                <Check className="w-4 h-4 stroke-[3]" />
+                <span>Concluído</span>
+              </button>
+            </div>
           </div>
         </motion.div>
       </div>

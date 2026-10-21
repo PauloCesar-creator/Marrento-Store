@@ -76,8 +76,6 @@ export default function SmartPanelModal({
 
   const totalProductValue = product.price * totalQuantity;
 
-  const [isProcessingImage, setIsProcessingImage] = useState(false);
-
   // Handle local image file upload for new variation
   const handleFileUpload = async (
     e: React.ChangeEvent<HTMLInputElement>,
@@ -87,7 +85,7 @@ export default function SmartPanelModal({
     if (file) {
       try {
         setIsProcessingImage(true);
-        const compressed = await compressImageFile(file, 800, 800, 0.82);
+        const compressed = await compressImageFile(file, 640, 640, 0.78);
         if (isEdit) {
           setEditVarImage(compressed);
         } else {
@@ -97,6 +95,7 @@ export default function SmartPanelModal({
         console.error('Error compressing image in SmartPanelModal:', err);
       } finally {
         setIsProcessingImage(false);
+        e.target.value = '';
       }
     }
   };
