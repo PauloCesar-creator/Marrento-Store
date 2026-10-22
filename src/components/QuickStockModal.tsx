@@ -305,9 +305,9 @@ export default function QuickStockModal({
 
                 {/* Scrollable list of variations */}
                 <div className="space-y-2.5 max-h-[46vh] overflow-y-auto pr-1">
-                  {variants.map((v) => (
+                  {variants.map((v, vIdx) => (
                     <div
-                      key={v.id}
+                      key={`quick-stock-var-${v.id || vIdx}-${vIdx}`}
                       className="p-3 bg-brand-bg/50 rounded-xl border border-brand-tertiary/60 hover:border-brand-tertiary flex items-center justify-between gap-3 transition"
                     >
                       {/* Variation Photo & Info */}

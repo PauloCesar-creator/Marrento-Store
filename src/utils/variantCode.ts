@@ -68,21 +68,31 @@ export function ensureProductVariantCodes(product: Product): Product {
   }
 
   let modified = false;
+  const seenIds = new Set<string>();
+
   const updatedVariants = product.variants.map((v, idx) => {
     const defaultCode = generateVariantCode(product.sku, idx, v.name);
     const defaultBarcode = generateVariantBarcode(product.sku, idx);
+
+    let id = v.id;
+    if (!id || seenIds.has(id)) {
+      id = `var-${product.id || 'prod'}-${idx + 1}-${Date.now().toString(36)}`;
+      modified = true;
+    }
+    seenIds.add(id);
 
     const hasValidSku = !!v.sku;
     const hasValidCode = !!v.code;
     const hasValidBarcode = !!v.barcode;
 
-    if (hasValidSku && hasValidCode && hasValidBarcode) {
+    if (id === v.id && hasValidSku && hasValidCode && hasValidBarcode) {
       return v;
     }
 
     modified = true;
     return {
       ...v,
+      id,
       sku: v.sku || defaultCode,
       code: v.code || v.sku || defaultCode,
       barcode: v.barcode || defaultBarcode,

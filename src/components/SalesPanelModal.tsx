@@ -860,9 +860,9 @@ export default function SalesPanelModal({
                             Nenhuma peça encontrada com "{searchTerm}".
                           </p>
                         ) : (
-                          filteredProducts.map((p) => (
+                          filteredProducts.map((p, pIdx) => (
                             <div
-                              key={p.id}
+                              key={`sales-filtered-prod-${p.id || pIdx}-${pIdx}`}
                               className="w-full flex items-center justify-between p-2 rounded-xl bg-[#141416] hover:bg-[#27272a] text-xs transition cursor-pointer"
                               onClick={() => {
                                 if (p.variants && p.variants.length > 0) {
@@ -921,9 +921,9 @@ export default function SalesPanelModal({
                     </div>
 
                     <div className="flex flex-wrap gap-2 pt-1 max-h-36 overflow-y-auto">
-                      {(pickingProductVariants.variants || []).map((v) => (
+                      {(pickingProductVariants.variants || []).map((v, vIdx) => (
                         <button
-                          key={v.id}
+                          key={`sales-picking-var-${v.id || vIdx}-${vIdx}`}
                           type="button"
                           disabled={v.quantity <= 0}
                           onClick={() => {
@@ -985,9 +985,9 @@ export default function SalesPanelModal({
                     </div>
                   ) : (
                     <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
-                      {cart.map((item) => (
+                      {cart.map((item, itemIdx) => (
                         <div
-                          key={item.id}
+                          key={`cart-item-${item.id || itemIdx}-${itemIdx}`}
                           className="p-3 rounded-2xl bg-[#161618] border border-white/10 flex items-center justify-between gap-3 group hover:border-[#ffd56d]/30 transition"
                         >
                           {/* Item Thumbnail & Info (Clickable for brief product details modal) */}
@@ -1084,12 +1084,12 @@ export default function SalesPanelModal({
                         { id: 'Cartão de Crédito', label: 'Crédito', icon: CreditCard },
                         { id: 'Cartão de Débito', label: 'Débito', icon: CreditCard },
                         { id: 'Dinheiro', label: 'Dinheiro', icon: Banknote },
-                      ].map((pm) => {
+                      ].map((pm, pmIdx) => {
                         const Icon = pm.icon;
                         const isSelected = paymentMethod === pm.id;
                         return (
                           <button
-                            key={pm.id}
+                            key={`sales-pm-${pm.id}-${pmIdx}`}
                             type="button"
                             onClick={() => setPaymentMethod(pm.id)}
                             className={`p-2.5 rounded-xl border flex flex-col items-center justify-center gap-1 text-xs font-bold transition cursor-pointer ${

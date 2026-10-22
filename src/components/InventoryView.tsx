@@ -1311,11 +1311,11 @@ export default function InventoryView({
 
               {/* Variations Quick List - Poucos detalhes para seleção rápida */}
               <div className="space-y-2 overflow-y-auto flex-1 pr-1 scrollbar-thin" id="quick-variant-list">
-                {variantPickerProduct.variants?.map((v) => {
+                {variantPickerProduct.variants?.map((v, vIdx) => {
                   const isOutOfStock = v.quantity <= 0;
                   return (
                     <button
-                      key={`quick-var-${v.id}`}
+                      key={`quick-var-${v.id || vIdx}-${vIdx}`}
                       type="button"
                       disabled={isOutOfStock}
                       onClick={(e) => {
@@ -1390,9 +1390,9 @@ export default function InventoryView({
 
       {/* Flying Red Dots Animation: leaping from product card straight into floating $ cart */}
       <AnimatePresence>
-        {flyingDots.map((dot) => (
+        {flyingDots.map((dot, dIdx) => (
           <motion.div
-            key={dot.id}
+            key={`flying-dot-${dot.id}-${dIdx}`}
             initial={{
               left: dot.startX,
               top: dot.startY,

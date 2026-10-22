@@ -226,9 +226,9 @@ export default function OperationModal({
                     autoFocus
                   />
                   <div className="max-h-40 overflow-y-auto space-y-1.5 pr-1">
-                    {filteredProducts.map((p) => (
+                    {filteredProducts.map((p, pIdx) => (
                       <button
-                        key={p.id}
+                        key={`op-prod-${p.id || pIdx}-${pIdx}`}
                         type="button"
                         onClick={() => {
                           setSelectedProductId(p.id);

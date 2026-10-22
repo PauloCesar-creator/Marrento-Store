@@ -636,9 +636,9 @@ export default function TagsAdminView({ products, categories }: TagsAdminViewPro
             >
               Todos
             </button>
-            {categories.map((cat) => (
+            {categories.map((cat, catIdx) => (
               <button
-                key={`cat-pill-${cat}`}
+                key={`cat-pill-${cat}-${catIdx}`}
                 type="button"
                 onClick={() => setSelectedCategory(cat)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition cursor-pointer ${
@@ -725,7 +725,7 @@ export default function TagsAdminView({ products, categories }: TagsAdminViewPro
             </div>
           ) : (
             <div className="space-y-2.5 max-h-[700px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-brand-tertiary" id="tags-products-list">
-              {filteredProducts.map((p) => {
+              {filteredProducts.map((p, pIdx) => {
                 const hasVariants = Boolean(p.variants && p.variants.length > 0);
                 const isExpanded = expandedProductIds[p.id] ?? true; // default expanded to see variants easily
                 const baseKey = getItemKey(p.id);
@@ -739,7 +739,7 @@ export default function TagsAdminView({ products, categories }: TagsAdminViewPro
 
                 return (
                   <div
-                    key={`tag-prod-${p.id}`}
+                    key={`tag-prod-${p.id || pIdx}-${pIdx}`}
                     className={`rounded-2xl border transition overflow-hidden ${
                       isBaseSelected || (hasVariants && p.variants!.some((v) => (selectedCopies[getItemKey(p.id, v.id)] || 0) > 0))
                         ? 'bg-brand-secondary/80 border-brand-primary/50'
@@ -889,7 +889,7 @@ export default function TagsAdminView({ products, categories }: TagsAdminViewPro
 
                           return (
                             <div
-                              key={`tag-variant-row-${v.id}`}
+                              key={`tag-variant-row-${v.id || vIdx}-${vIdx}`}
                               className={`flex items-center justify-between gap-3 p-2 rounded-xl transition ${
                                 isVSelected
                                   ? 'bg-brand-primary/15 border border-brand-primary/40 text-white'

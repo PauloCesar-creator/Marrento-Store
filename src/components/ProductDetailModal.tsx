@@ -87,6 +87,8 @@ export default function ProductDetailModal({
 
   const currentVariant = variants.find((v) => v.id === selectedVariantId);
   const isBaseItem = selectedVariantId === 'main';
+  const hasVariants = variants.length > 0;
+  const isBaseBlocked = hasVariants && (isBaseItem || !currentVariant);
 
   const rawHeroImage =
     (!isBaseItem ? currentVariant?.imageUrl : null) ||
@@ -567,7 +569,7 @@ export default function ProductDetailModal({
                       ? 'border-[#E5B842] ring-2 ring-[#E5B842]/50 scale-105 shadow-md'
                       : 'border-white/10 opacity-70 hover:opacity-100'
                   }`}
-                  title="Visão Geral (Base)"
+                  title={hasVariants ? 'Visão Geral (Base - Seleção de variação obrigatória para vender)' : 'Visão Geral (Base)'}
                 >
                   <img
                     src={product.imageUrl || LUXURY_IMAGE_FALLBACK}
@@ -580,9 +582,9 @@ export default function ProductDetailModal({
                 </button>
 
                 {/* Variation Thumbnails */}
-                {variants.map((v) => (
+                {variants.map((v, vIdx) => (
                   <button
-                    key={v.id}
+                    key={`pdetail-thumb-${v.id || vIdx}-${vIdx}`}
                     type="button"
                     onClick={() => {
                       setSelectedVariantId(v.id);
@@ -656,11 +658,11 @@ export default function ProductDetailModal({
 
               {/* Grid of Variation Chips */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                {variants.map((v) => {
+                {variants.map((v, vIdx) => {
                   const isSelected = selectedVariantId === v.id;
                   return (
                     <button
-                      key={v.id}
+                      key={`pdetail-chip-${v.id || vIdx}-${vIdx}`}
                       type="button"
                       onClick={() => {
                         setSelectedVariantId(v.id);
@@ -699,11 +701,34 @@ export default function ProductDetailModal({
                         </div>
                       </div>
 
-                      {isSelected && (
-                        <div className="w-5 h-5 rounded-full border-1.5 border-[#ffd56d] flex items-center justify-center text-[#ffd56d] shrink-0 ml-1">
-                          <Check className="w-3 h-3 stroke-[3]" />
-                        </div>
-                      )}
+                      <div className="flex items-center gap-1.5 shrink-0 ml-1">
+                        {isSelected && (
+                          <div className="w-5 h-5 rounded-full border-1.5 border-[#ffd56d] flex items-center justify-center text-[#ffd56d] shrink-0">
+                            <Check className="w-3 h-3 stroke-[3]" />
+                          </div>
+                        )}
+                        {onAddToCart && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (v.quantity <= 0) return;
+                              onAddToCart(product, v);
+                              onClose();
+                            }}
+                            disabled={v.quantity <= 0}
+                            className={`px-2 py-1 rounded-lg font-sans font-bold text-[10px] uppercase tracking-wider flex items-center gap-1 transition ${
+                              v.quantity <= 0
+                                ? 'bg-white/5 text-gray-500 cursor-not-allowed'
+                                : 'bg-[#ffd56d]/15 hover:bg-[#ffd56d] text-[#ffd56d] hover:text-black border border-[#ffd56d]/30 cursor-pointer active:scale-95'
+                            }`}
+                            title={v.quantity <= 0 ? 'Sem estoque disponível' : `Adicionar variação "${v.name}" ao carrinho`}
+                          >
+                            <ShoppingBag className="w-3 h-3" />
+                            <span>Vender</span>
+                          </button>
+                        )}
+                      </div>
                     </button>
                   );
                 })}
@@ -727,9 +752,20 @@ export default function ProductDetailModal({
             <div className="bg-[#141416] border border-white/5 rounded-2xl p-4 space-y-2">
               <div className="flex items-center justify-between text-xs">
                 <span className="text-[#8E8E93]">Variação Ativa:</span>
-                <span className="font-bold text-white truncate max-w-[200px] bg-[#222227] px-2.5 py-1 rounded-md border border-[#2c2c36]">
-                  {currentVariant ? `${currentVariant.name} (${currentVariant.quantity} un)` : 'Geral (Base)'}
-                </span>
+                {currentVariant ? (
+                  <span className="font-bold text-white truncate max-w-[200px] bg-[#222227] px-2.5 py-1 rounded-md border border-[#2c2c36]">
+                    {currentVariant.name} ({currentVariant.quantity} un)
+                  </span>
+                ) : hasVariants ? (
+                  <span className="font-bold text-amber-400 truncate max-w-[240px] bg-amber-500/10 px-2.5 py-1 rounded-md border border-amber-500/30 flex items-center gap-1.5 text-[11px]">
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                    <span>Geral (Base) - Venda Bloqueada</span>
+                  </span>
+                ) : (
+                  <span className="font-bold text-white truncate max-w-[200px] bg-[#222227] px-2.5 py-1 rounded-md border border-[#2c2c36]">
+                    Geral (Base)
+                  </span>
+                )}
               </div>
               <div className="flex items-center justify-between text-xs pt-2 border-t border-white/5">
                 <span className="text-[#8E8E93]">Estoque Total Somado:</span>
@@ -924,43 +960,68 @@ export default function ProductDetailModal({
           </div>
 
           {/* 8. Sticky Bottom Bar: Stock Summary + Both "Editar Produto" and "Fechar" buttons */}
-          <div className="sticky bottom-0 z-30 bg-[#131315]/95 backdrop-blur-md border-t border-white/10 px-4 sm:px-6 py-3.5 flex items-center justify-between shrink-0 gap-3">
-            <div className="space-y-0.5">
-              <span className="block text-[10px] uppercase font-bold text-[#8E8E93] tracking-wider">
-                Qtd. Total:
-              </span>
-              <div className="flex items-baseline gap-1">
-                <span className="font-serif font-black text-xl sm:text-2xl text-[#ffd56d]">
-                  {totalQuantity}
+          <div className="sticky bottom-0 z-30 bg-[#131315]/95 backdrop-blur-md border-t border-white/10 px-4 sm:px-6 py-3 flex flex-col gap-2.5 shrink-0">
+            {isBaseBlocked && (
+              <div className="flex items-center gap-2 py-1.5 px-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[11px] leading-tight">
+                <AlertTriangle className="w-4 h-4 shrink-0 text-amber-400" />
+                <span>
+                  <strong>Produto com variações:</strong> selecione uma variação acima para vender. O produto base não pode ser adicionado ao carrinho.
                 </span>
-                <span className="text-xs font-bold text-[#8E8E93] uppercase">UN</span>
               </div>
-            </div>
+            )}
 
-            <div className="flex items-center gap-2 sm:gap-3">
-              {onAddToCart && (
+            <div className="flex items-center justify-between gap-3">
+              <div className="space-y-0.5">
+                <span className="block text-[10px] uppercase font-bold text-[#8E8E93] tracking-wider">
+                  Qtd. Total:
+                </span>
+                <div className="flex items-baseline gap-1">
+                  <span className="font-serif font-black text-xl sm:text-2xl text-[#ffd56d]">
+                    {totalQuantity}
+                  </span>
+                  <span className="text-xs font-bold text-[#8E8E93] uppercase">UN</span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 sm:gap-3">
+                {onAddToCart && (
+                  <button
+                    type="button"
+                    disabled={isBaseBlocked}
+                    onClick={() => {
+                      if (isBaseBlocked) return;
+                      onAddToCart(product, currentVariant);
+                      onClose();
+                    }}
+                    title={
+                      isBaseBlocked
+                        ? 'Selecione uma variação antes de adicionar ao carrinho'
+                        : currentVariant
+                        ? `Vender variação ${currentVariant.name}`
+                        : 'Vender produto'
+                    }
+                    className={`py-2.5 sm:py-3 px-3.5 sm:px-4 rounded-xl font-sans font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 border transition ${
+                      isBaseBlocked
+                        ? 'bg-white/5 border-white/10 text-gray-500 cursor-not-allowed opacity-50'
+                        : 'bg-[#ffd56d]/15 hover:bg-[#ffd56d] text-[#ffd56d] hover:text-black border-[#ffd56d]/30 cursor-pointer active:scale-98'
+                    }`}
+                    id="btn-detalhes-vender"
+                  >
+                    <ShoppingBag className="w-3.5 h-3.5" />
+                    <span>{currentVariant ? `Vender (${currentVariant.name})` : 'Vender'}</span>
+                  </button>
+                )}
+
                 <button
                   type="button"
-                  onClick={() => {
-                    onAddToCart(product, currentVariant);
-                    onClose();
-                  }}
-                  className="py-2.5 sm:py-3 px-3.5 sm:px-4 rounded-xl bg-[#ffd56d]/15 hover:bg-[#ffd56d] text-[#ffd56d] hover:text-black font-sans font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 border border-[#ffd56d]/30 transition cursor-pointer active:scale-98"
+                  onClick={onClose}
+                  className="py-2.5 sm:py-3 px-5 sm:px-7 rounded-xl bg-[#E5B842] hover:bg-[#ffd56d] text-[#121214] font-sans font-black text-xs uppercase tracking-wider flex items-center gap-1.5 shadow-xl transition cursor-pointer active:scale-98"
+                  id="btn-detalhes-concluido"
                 >
-                  <ShoppingBag className="w-3.5 h-3.5" />
-                  <span>Vender</span>
+                  <Check className="w-4 h-4 stroke-[3]" />
+                  <span>Concluído</span>
                 </button>
-              )}
-
-              <button
-                type="button"
-                onClick={onClose}
-                className="py-2.5 sm:py-3 px-5 sm:px-7 rounded-xl bg-[#E5B842] hover:bg-[#ffd56d] text-[#121214] font-sans font-black text-xs uppercase tracking-wider flex items-center gap-1.5 shadow-xl transition cursor-pointer active:scale-98"
-                id="btn-detalhes-concluido"
-              >
-                <Check className="w-4 h-4 stroke-[3]" />
-                <span>Concluído</span>
-              </button>
+              </div>
             </div>
           </div>
         </motion.div>

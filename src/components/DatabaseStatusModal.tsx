@@ -422,11 +422,11 @@ export default function DatabaseStatusModal({ isOpen, onClose }: DatabaseStatusM
                   'transactions',
                   'monthly_closings',
                   'notifications'
-                ].map((tbl) => {
+                ].map((tbl, tblIdx) => {
                   const isFound = status?.tablesFound?.includes(tbl);
                   return (
                     <div
-                      key={tbl}
+                      key={`db-tbl-${tbl}-${tblIdx}`}
                       className={`p-2.5 rounded-xl border flex items-center justify-between text-xs ${
                         isFound
                           ? 'bg-brand-bg/90 border-emerald-500/30 text-emerald-300'

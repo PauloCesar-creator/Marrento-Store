@@ -1305,9 +1305,9 @@ Fim do Relatório - Marento Store Luxury Control
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-            {monthlyClosings.map((closing) => (
+            {monthlyClosings.map((closing, cIdx) => (
               <div
-                key={`closing-card-${closing.id}`}
+                key={`closing-card-${closing.id || cIdx}-${cIdx}`}
                 className="p-4 rounded-xl bg-brand-bg/80 border border-brand-tertiary hover:border-brand-primary/50 transition space-y-3 relative group"
               >
                 <div className="flex items-start justify-between">

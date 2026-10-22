@@ -194,6 +194,11 @@ export default function App() {
   }, [cartItems]);
 
   const handleAddToCart = (product: Product, variant?: ProductVariant, qtyToAdd = 1) => {
+    // Regra estrita: se o produto possui variações, não permitir adicionar produto base ao carrinho
+    if (product.variants && product.variants.length > 0 && !variant) {
+      console.warn(`[Carrinho Bloqueado] Produto "${product.name}" possui variações e requer seleção de uma variação.`);
+      return;
+    }
     const maxStock = variant ? variant.quantity : product.quantity;
     if (maxStock <= 0) return;
 
